@@ -113,15 +113,17 @@ function parseEventLine(line, recentEvents) {
 
 /**
  * Parses one line of the [functions] section: "file:lineNumber:functionName".
- * The function name may itself contain colons (e.g. "Foo::bar"), so we split,
- * take the first two fields, and rejoin the rest.
+ * Both the file (e.g. "phar://...") and the function name (e.g. "Foo::bar") may
+ * contain colons, but the line number is always a run of digits and a function
+ * name never contains a ":<digits>:" sequence, so the field separators are the
+ * last ":<digits>:" in the line.
  */
 function parseFunctionLine(line) {
-    const parts = line.split(':');
-    const file = parts.shift();
-    const lineNumber = Number(parts.shift());
+    const match = /^(.*):(\d+):(.*)$/.exec(line);
+    const file = match[1];
+    const lineNumber = Number(match[2]);
 
-    let functionName = parts.join(':');
+    let functionName = match[3];
     if (functionName === '{closure}') {
         functionName = `{closure:${file}:${lineNumber}}`;
     }
