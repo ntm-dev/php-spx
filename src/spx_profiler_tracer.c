@@ -133,7 +133,7 @@ static spx_profiler_reporter_cost_t null_reporter_notify(
 static void calibrate(tracing_profiler_t * profiler, const spx_php_function_t * function);
 
 static uint64_t func_table_hmap_hash_key(const void * v);
-static int func_table_hmap_cmp_key(const void * va, const void * vb);
+static int func_table_hmap_cmp_key(const void * a, const void * b);
 
 static spx_profiler_func_table_entry_t * func_table_get_entry(
     tracing_profiler_t * profiler,
@@ -601,24 +601,9 @@ static uint64_t func_table_hmap_hash_key(const void * v)
     return ((const spx_php_function_t *) v)->hash_code;
 }
 
-static int func_table_hmap_cmp_key(const void * va, const void * vb)
+static int func_table_hmap_cmp_key(const void * a, const void * b)
 {
-    const spx_php_function_t * a = va;
-    const spx_php_function_t * b = vb;
-
-    int n;
-
-    n = strcmp(a->func_name, b->func_name);
-    if (n != 0) {
-        return n;
-    }
-
-    n = strcmp(a->class_name, b->class_name);
-    if (n != 0) {
-        return n;
-    }
-
-    return 0;
+    return spx_php_function_cmp(a, b);
 }
 
 static spx_profiler_func_table_entry_t * func_table_get_entry(

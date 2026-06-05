@@ -23,7 +23,6 @@
 
 #include "main/php.h"
 
-
 #define SPX_PHP_STACK_CAPACITY 16384
 
 typedef struct {
@@ -47,6 +46,7 @@ int spx_php_previous_userland_function(const spx_php_function_t * current, spx_p
 void spx_php_function_at(size_t depth, spx_php_function_t * function);
 uint8_t spx_php_is_internal_function(const spx_php_function_t * function);
 size_t spx_php_function_call_site_line(const spx_php_function_t * function);
+int spx_php_function_cmp(const spx_php_function_t * a, const spx_php_function_t * b);
 
 const char * spx_php_ini_get_string(const char * name);
 double spx_php_ini_get_double(const char * name);
