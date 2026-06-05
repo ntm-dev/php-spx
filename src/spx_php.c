@@ -48,6 +48,19 @@
 #include "spx_str_builder.h"
 #include "spx_utils.h"
 
+
+/*
+    SPX_PHP_FUNCTION_IDENTITY_NEEDS_LOCATION drives whether file_name/line is added to the
+    function identity (func_name, class_name). Required only up to PHP 8.3: there every
+    closure is named "{closure}", so two closures in the same scope are told apart only by
+    their definition site. Since 8.4 the name embeds that site.
+*/
+#if ZEND_MODULE_API_NO < 20240924 /* PHP < 8.4 */
+#   define SPX_PHP_FUNCTION_IDENTITY_NEEDS_LOCATION 1
+#else
+#   define SPX_PHP_FUNCTION_IDENTITY_NEEDS_LOCATION 0
+#endif
+
 #define ZE_HASHTABLE_FOREACH(ht, entry, block)                  \
 do {                                                            \
     void * entry;                                               \
@@ -215,6 +228,7 @@ static void global_hook_zend_error_cb(
 #endif
 );
 
+static uint64_t resolve_function_hash_code(const spx_php_function_t * function);
 static void push_frame(uint8_t special_function, void * data);
 static void update_userland_stats(void);
 
@@ -422,7 +436,7 @@ void spx_php_function_at(size_t depth, spx_php_function_t * function)
     if (context.stack[function->depth - 1].special_function) {
         function->class_name = "";
         function->func_name = context.stack[function->depth - 1].data.function_name;
-        function->hash_code = zend_inline_hash_func(function->func_name, strlen(function->func_name));
+        function->hash_code = resolve_function_hash_code(function);
     } else {
         execute_data_function(
             context.stack[function->depth - 1].data.execute_data,
@@ -479,6 +493,32 @@ size_t spx_php_function_call_site_line(const spx_php_function_t * function)
     }
 
     return prev_execute_data->opline->lineno;
+}
+
+int spx_php_function_cmp(const spx_php_function_t * a, const spx_php_function_t * b)
+{
+    int n;
+
+    n = strcmp(a->func_name, b->func_name);
+    if (n != 0) {
+        return n;
+    }
+
+    n = strcmp(a->class_name, b->class_name);
+    if (n != 0) {
+        return n;
+    }
+
+#if SPX_PHP_FUNCTION_IDENTITY_NEEDS_LOCATION
+    n = strcmp(a->file_name, b->file_name);
+    if (n != 0) {
+        return n;
+    }
+
+    return (int) a->line - (int) b->line;
+#else
+    return 0;
+#endif
 }
 
 const char * spx_php_ini_get_string(const char * name)
@@ -1020,14 +1060,11 @@ static void execute_data_function(
     const zend_execute_data * execute_data,
     spx_php_function_t * function
 ) {
-    int closure = 0;
     const zend_function * func = NULL;
     const zend_class_entry * ce = NULL;
 
     if (execute_data && zend_is_executing()) {
         func = execute_data->func;
-
-        closure = func->common.fn_flags & ZEND_ACC_CLOSURE;
 
         if (func->type == ZEND_EVAL_CODE) {
             function->file_name = "eval()";
@@ -1109,20 +1146,24 @@ static void execute_data_function(
         }
     }
 
-    if (func && ! closure) {
-        /*
-            Hashing the (non-closure) function address is safe since it always point to the same
-            function table entry for the whole script's lifespan.
-        */
-        function->hash_code = zend_inline_hash_func((void *)&func, sizeof(void *));
-        if (ce && ce->ce_flags & ZEND_ACC_ANON_CLASS) {
-            function->hash_code ^= zend_inline_hash_func(function->class_name, strlen(function->class_name));
-        }
+    /*
+        A named user function or method has a single op_array for the whole script, so its address is
+        a stable unique key: hash it directly. The other cases map several addresses onto one function,
+        so fall back to the textual identity:
+          - eval() recompiles a fresh op_array on each call;
+          - an internal method is copied into each inheriting class;
+          - a closure is copied into every Closure instance of the same literal;
+          - an anonymous class may be recompiled.
+    */
+    if (
+        func
+        && func->type == ZEND_USER_FUNCTION
+        && !(func->common.fn_flags & ZEND_ACC_CLOSURE)
+        && !(ce && (ce->ce_flags & ZEND_ACC_ANON_CLASS))
+    ) {
+        function->hash_code = zend_inline_hash_func((void *) &func, sizeof(void *));
     } else {
-        function->hash_code =
-            zend_inline_hash_func(function->file_name, strlen(function->file_name))
-                ^ zend_inline_hash_func((void *) &function->line, sizeof(function->line))
-        ;
+        function->hash_code = resolve_function_hash_code(function);
     }
 }
 
@@ -1599,6 +1640,21 @@ static void global_hook_zend_error_cb(
         args
 #endif
     );
+}
+
+static uint64_t resolve_function_hash_code(const spx_php_function_t * function)
+{
+    return zend_inline_hash_func(function->func_name, strlen(function->func_name))
+        ^ zend_inline_hash_func(function->class_name, strlen(function->class_name))
+#if SPX_PHP_FUNCTION_IDENTITY_NEEDS_LOCATION
+        /*
+            Mixed in only to spread entries that share the same func_name/class_name
+            (every "{closure}" before 8.4) across the buckets instead of piling into one.
+        */
+        ^ zend_inline_hash_func(function->file_name, strlen(function->file_name))
+        ^ zend_inline_hash_func((void *) &function->line, sizeof(function->line))
+#endif
+    ;
 }
 
 static void push_frame(uint8_t special_function, void * data)
