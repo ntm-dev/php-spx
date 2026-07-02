@@ -1,68 +1,94 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="utf-8">
-    <title>SPX Report</title>
-    <link rel="stylesheet" href="?SPX_UI_URI=/css/main.css">
+    <title>PHP Profiler Report</title>
+    <link rel="stylesheet" href="?SPX_UI_URI=/dist/output.css">
+    <script src="https://cdn.jsdelivr.net/npm/uikit@3.20.8/dist/js/uikit.min.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/uikit@3.20.8/dist/js/uikit-icons.min.js"></script>
+    <script>
+        // On page load or when changing themes, best to add inline in `head` to avoid FOUC
+        if (
+            localStorage.getItem("color-theme") === "dark" ||
+            (!("color-theme" in localStorage) &&
+                window.matchMedia("(prefers-color-scheme: dark)").matches)
+        ) {
+            document.documentElement.classList.add("dark");
+        } else {
+            document.documentElement.classList.remove("dark");
+        }
+    </script>
 </head>
-<body>
-    <div id="init-report">
-        <div>
-            <h2>Initializing...</h2>
-            <p></p>
-            <div class="progress">
-                <div style="width: 0%"></div>
+
+<body class="font-geist-sans max-h-screen h-screen bg-background">
+    <div id="init-report" class="absolute w-full h-screen flex items-center justify-center bg-background z-20">
+        <div class="rounded-md shadow p-4 bg-white max-w-lg w-full h-64">
+            <h2 class="text-2xl font-medium">Initializing...</h2>
+            <hr class="my-4" />
+            <p class="font-geist-mono"></p>
+            <div class="progress font-geist-mono">
+                <div class="font-geist-mono" style="width: 0%"></div>
             </div>
-            <p></p>
+            <p class="font-geist-mono"></p>
         </div>
     </div>
 
-    <div style="display: flex; flex-direction: column; height: 100%">
-        <div style="flex: 0 0 24px; display: flex; flex-direction: row;">
-            <div id="metric-selector" class="widget" style="flex: 0 0 120px;">
-                <select></select>
+    <div class="flex flex-col h-full px-2">
+        <div class="-mx-2 relative bg-red-600 text-white">
+            <div id="header" class="mx-auto flex items-center justify-between gap-6 px-6 py-3 sm:py-2">
+                <a href="/?SPX_UI_URI=/index.html"
+                    class="inline-flex items-center gap-3 rounded transition hover:text-white/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-red-600">
+                    <span class="text-[13px]">PHP Profiler</span>
+                </a>
+
+                <select class="uk-select bg-background w-64" id="report-selector"
+                    onchange="window.location.href = '/?SPX_UI_URI=/report.html&key=' + this.value">
+                    >
+                </select>
             </div>
-            <div id="colorscheme-manager" class="widget" style="flex: 0 0 180px;"></div>
-            <div id="category-legend" class="widget"></div>
-            <div id="search-container" class="widget" style="flex: 0 0 195px;">
-                <input type="text"
-                       id="search_query"
-                       name="search_query"
-                       autocomplete="off"
-                       placeholder="Search by function name">
-                <button id="search_query_button_clear" onclick="$(window).trigger('spx-search-clear')" style="display: none;">
-                    X
-                </button>
-            </div>
-            <div id="color-scale" class="widget" style="flex: 1 1 150px;"></div>
         </div>
-        <div id="overview" class="widget visualization" style="flex: 0 0 80px"></div>
+        <div class="flex flex-row space-x-2 py-1">
+            <div id="metric-selector" class="widget" style="flex: 0 0 120px;">
+                <select class="uk-select"></select>
+            </div>
+            <div id="category-legend" class="widget"></div>
+            <div id="search-container" class="widget">
+                <div class="uk-inline">
+                    <input type="text" id="search_query" class="uk-input" name="search_query" autocomplete="off"
+                        placeholder="Function name">
+                    <a onclick="$(window).trigger('spx-search-clear')" id="search_query_button_clear"
+                        style="display: none;" class="uk-form-icon uk-form-icon-flip" href="#" uk-icon="icon: close">
+                    </a>
+                </div>
+            </div>
+            <div id="color-scale" class="widget rounded-sm overflow-hidden text-gray-900" style="flex: 1 1 150px;">
+            </div>
+        </div>
+        <div id="overview" class="widget visualization rounded-sm overflow-hidden select-none" style="flex: 0 0 80px">
+        </div>
         <div style="flex:1; min-height: 0; display: flex; flex-direction: column;">
-            <div id="timeline" class="widget visualization" style="flex: 0 0 auto; height: 300px"></div>
-            <div
-                style="flex: 0 0 3px; width: 100%; background-color: #444; cursor: row-resize;"
-                data-layout-splitter-target="timeline"
-                data-layout-splitter-axis="y"
-                data-layout-splitter-dir="-1"
-                data-layout-splitter-min="30"
-            ></div>
+            <div id="timeline" class="widget visualization select-none cursor-move"
+                style="flex: 0 0 auto; height: 300px"></div>
+            <div class="cursor-row-resize w-full h-px bg-black" data-layout-splitter-target="timeline"
+                data-layout-splitter-axis="y" data-layout-splitter-dir="-1" data-layout-splitter-min="30"></div>
             <div style="flex: 1; min-height: 0; display: flex; flex-direction: row;">
                 <div id="flatprofile" class="widget" style="flex: 0 0 auto; width: 900px"></div>
-                <div
-                    style="flex: 0 0 3px; height: 100%; background-color: #444; cursor: col-resize;"
-                    data-layout-splitter-target="flatprofile"
-                    data-layout-splitter-axis="x"
-                    data-layout-splitter-dir="-1"
-                    data-layout-splitter-min="500"
-                ></div>
-                <div id="flamegraph" class="widget visualization" style="flex: 1 1 auto"></div>
+                <div class="cursor-col-resize w-px bg-black h-full" data-layout-splitter-target="flatprofile"
+                    data-layout-splitter-axis="x" data-layout-splitter-dir="-1" data-layout-splitter-min="500"></div>
+                <div id="flamegraph" class="widget visualization text-background" style="flex: 1 1 auto"></div>
             </div>
         </div>
     </div>
 
+    <script src="https://code.jquery.com/jquery-3.2.1.min.js"
+        integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4=" crossorigin="anonymous"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jscolor/2.0.4/jscolor.min.js"
+        integrity="sha256-CJWfUCeP3jLdUMVNUll6yQx37gh9AKmXTRxvRf7jzro=" crossorigin="anonymous"></script>
+
     <!-- Required workaround for Firefox to fix a "no credentials" issue -->
-    <script crossorigin src="?SPX_UI_URI=/js/jquery-3.2.1.min.js" integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4="></script>
-    <script crossorigin src="?SPX_UI_URI=/js/jscolor.min.js" integrity="sha256-CJWfUCeP3jLdUMVNUll6yQx37gh9AKmXTRxvRf7jzro="></script>
     <script type="module" crossorigin src="?SPX_UI_URI=/js/fmt.js"></script>
     <script type="module" crossorigin src="?SPX_UI_URI=/js/profileData.js"></script>
     <script type="module" crossorigin src="?SPX_UI_URI=/js/widget.js"></script>
@@ -76,7 +102,7 @@
         }
 
         const fmt = await import(getImportUrl('/js/fmt.js'));
-        const {ProfileDataBuilder} = await import(getImportUrl('/js/profileData.js'));
+        const { ProfileDataBuilder } = await import(getImportUrl('/js/profileData.js'));
         const widget = await import(getImportUrl('/js/widget.js'));
         const layoutSplitter = await import(getImportUrl('/js/layoutSplitter.js'));
 
@@ -131,12 +157,23 @@
                 );
             }
 
-            fetch('?SPX_UI_URI=/data/metrics', {credentials: "same-origin"})
+            fetch('?SPX_UI_URI=/data/reports/metadata', { credentials: "same-origin" })
+                .then(response => response.json())
+                .then(response => {
+                    response.results = response.results.filter(result => result.http_host == document.location.host)
+                    response.results.forEach(report => {
+                        $('#report-selector').append(
+                            `<option value="${report.key}" ${report.key === decodeURIComponent(key) ? 'selected' : ''} >${report.http_method} ${report.http_request_uri} ${report.http_host}</option>`
+                        );
+                    });
+                });
+
+            fetch('?SPX_UI_URI=/data/metrics', { credentials: "same-origin" })
                 .then(response => response.json())
                 .then(response => {
                     profileDataBuilder = new ProfileDataBuilder(response.results);
 
-                    return fetch('?SPX_UI_URI=/data/reports/metadata/' + key, {credentials: "same-origin"});
+                    return fetch('?SPX_UI_URI=/data/reports/metadata/' + key, { credentials: "same-origin" });
                 })
                 .then(response => {
                     if (!response.ok) {
@@ -148,7 +185,7 @@
                 .then(metadata => {
                     profileDataBuilder.setMetadata(metadata);
 
-                    return fetch('?SPX_UI_URI=/data/reports/get/' + key, {credentials: "same-origin"});
+                    return fetch('?SPX_UI_URI=/data/reports/get/' + key, { credentials: "same-origin" });
                 })
                 .then(response => {
                     if (!response.ok) {
@@ -203,7 +240,7 @@
 
                         setProgress(
                             'Building call list... (1/2)<br>'
-                                + `${fmt.quantity(profileDataBuilder.getTotalCallCount())} function calls`
+                            + `${fmt.quantity(profileDataBuilder.getTotalCallCount())} function calls`
                             ,
                             profileDataBuilder.getCurrentCallCount(),
                             profileDataBuilder.getTotalCallCount()
@@ -301,8 +338,9 @@
                     initDialog.progressInfo.innerText = e;
                     console.error(e)
                 })
-            ;
+                ;
         });
     </script>
 </body>
+
 </html>
