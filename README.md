@@ -16,6 +16,7 @@
 
 ![Showcase](https://github.com/NoiseByNorthwest/NoiseByNorthwest.github.io/blob/43e3ffe185a1dcec70e7c8ced36acfdf316bae65/php-spx/doc/fp1.gif)
 
+
 SPX, which stands for _Simple Profiling eXtension_, is just another profiling extension for PHP.
 It differentiates itself from other similar extensions as being:
 * totally free and confined to your infrastructure (i.e. no data leaks to a SaaS).
@@ -62,7 +63,7 @@ pie install noisebynorthwest/php-spx
 #### Install from source
 
 ```shell
-git clone https://github.com/NoiseByNorthwest/php-spx.git
+git clone https://github.com/ntm-dev/php-spx.git
 cd php-spx
 git checkout release/latest
 phpize
@@ -115,11 +116,7 @@ _N.B.: `http://localhost/` must be served by a PHP script through standard web s
 
 _If you see only a blank page then make sure to set `zlib.output_compression = 0` in your PHP configuration file_
 
-You will then see the following form:
-
-![Showcase](https://github.com/NoiseByNorthwest/NoiseByNorthwest.github.io/blob/93baabbcba04223586d06756dbcecfbd6ec1293d/php-spx/doc/cp-form.png)
-
-Then switch on "Enabled". At this point profiling is enabled for the current domain and your current browser session through a set of dedicated cookies.
+You will then see the control panel form. Switch on "Enabled" to enable profiling for the current domain and your current browser session through a set of dedicated cookies.
 
 Profiling can also be triggered with Curl as shown in this example:
 
@@ -128,8 +125,6 @@ Profiling can also be triggered with Curl as shown in this example:
 _N.B.: You can also enable the profiling at INI configuration level via the `spx.http_profiling_enabled` [setting](#configuration), and therefore for all HTTP requests. However, keep in mind that using this setting on a high-traffic environment could quickly exhaust the storage device's capacity of the SPX's data directory._
 
 Then refresh the web request you want to profile and refresh the control panel to see the generated report in the list below the control panel form.
-
-![Showcase](https://github.com/NoiseByNorthwest/NoiseByNorthwest.github.io/blob/d8a90827d6eb256f49d580de448b6b6fad4119ac/php-spx/doc/cp-list2.png)
 
 Then click on the report in the list and enjoy the [analysis screen](#analysis-screen).
 
@@ -380,10 +375,6 @@ This is the home page of the web UI, divided into 2 parts:
 
 #### Analysis screen
 
-[Click here for a live demo of the analysis screen](https://noisebynorthwest.github.io/php-spx/demo/report.html?key=spx-full-20180603_211110-dev-3540-294703905)
-
-![Showcase](https://github.com/NoiseByNorthwest/NoiseByNorthwest.github.io/blob/d8a90827d6eb256f49d580de448b6b6fad4119ac/php-spx/doc/as.th.png)
-
 ##### Performance, report size & sampling
 
 The analysis screen can nicely handle profile reports with up to several (5+) millions of recorded function calls with Chromium on my i5 @ 3.3GHz / 8GB desktop.
@@ -394,16 +385,12 @@ See _SPX_SAMPLING_PERIOD_ [parameter](#available-parameters) for command line sc
 
 This is simply a combo box for selecting the currently analyzed metric.
 
-![Showcase](https://github.com/NoiseByNorthwest/NoiseByNorthwest.github.io/blob/d8a90827d6eb256f49d580de448b6b6fad4119ac/php-spx/doc/as-ms.png)
-
 ##### Color scheme selector
 
 By default, function related blocks in the visualizations are colored according to their cost, with a color scale displayed at the top right of the screen.
 
 You can also define a custom color scheme by clicking on the color scheme mode link, displayed at the top of the screen just after the metric selector.
-A drop-down window will then appear and allow you to switch between `default` and `category` mode and define (add/edit/delete) your categories (color, name, pattern list) for the `category` mode (see the screenshot below).
-
-![Showcase](https://github.com/NoiseByNorthwest/NoiseByNorthwest.github.io/blob/d8a90827d6eb256f49d580de448b6b6fad4119ac/php-spx/doc/as-csm.png)
+A drop-down window will then appear and allow you to switch between `default` and `category` mode and define (add/edit/delete) your categories (color, name, pattern list) for the `category` mode.
 
 ##### Timeline overview
 
@@ -415,8 +402,6 @@ Except for wall time, the current metric is also plotted (current value over tim
 Supported controls:
 - horizontal left click drag: shift the selected time range
 - resize click on selected time range rectangle: shift one of the selected time range boundary
-
-![Showcase](https://github.com/NoiseByNorthwest/NoiseByNorthwest.github.io/blob/d8a90827d6eb256f49d580de448b6b6fad4119ac/php-spx/doc/as-ov.png)
 
 ##### Timeline focus
 
@@ -431,8 +416,6 @@ Supported controls:
 
 Except for wall time, the current metric is also plotted (current value over time) on a foreground layer.
 
-![Showcase](https://github.com/NoiseByNorthwest/NoiseByNorthwest.github.io/blob/d8a90827d6eb256f49d580de448b6b6fad4119ac/php-spx/doc/as-tl.png)
-
 ##### Flat profile
 
 This visualization is the flat profile for the selected time range and the selected metric, displayed as a sortable table.
@@ -441,22 +424,14 @@ The `Inc.` and `Exc.` sub-columns respectively correspond to:
 - the inclusive resource consumption of the function, including its called functions consumption
 - the exclusive resource consumption of the function, excluding its called functions consumption
 
-![Showcase](https://github.com/NoiseByNorthwest/NoiseByNorthwest.github.io/blob/d8a90827d6eb256f49d580de448b6b6fad4119ac/php-spx/doc/as-fp.png)
-
 ##### Flame Graph
 
 This visualization, designed by [Brendan Gregg](http://www.brendangregg.com/flamegraphs.html), allows to quickly find the hot code path for the selected time range and the selected metric.
 Metrics corresponding to releasable resources (memory, objects in use...) are not supported by this visualization.
 
-![Showcase](https://github.com/NoiseByNorthwest/NoiseByNorthwest.github.io/blob/d8a90827d6eb256f49d580de448b6b6fad4119ac/php-spx/doc/as-fg.png)
-
-
 ##### Function highlighting
 
 You can highlight a function by clicking on one of its spans within the timeline or Flamegraph widgets or its name within the flat profile widget.
-
-![Showcase](https://github.com/NoiseByNorthwest/NoiseByNorthwest.github.io/blob/47d8f8d93fad1e6659c46c47e5aa8f82822454a9/php-spx/doc/as-fh.png)
-
 
 ## Security concern
 
@@ -510,12 +485,12 @@ I have found lot of inspiration and hints reading:
 See the [LICENSE][:link-license:] file for more information.
 
 <!-- All external links should be here to avoid duplication and long lines with links -->
-[:badge-ci:]:           https://github.com/NoiseByNorthwest/php-spx/actions/workflows/main.yml/badge.svg
-[:link-ci:]:            https://github.com/NoiseByNorthwest/php-spx/actions/workflows/main.yml
+[:badge-ci:]:           https://github.com/ntm-dev/php-spx/actions/workflows/main.yml/badge.svg
+[:link-ci:]:            https://github.com/ntm-dev/php-spx/actions/workflows/main.yml
 
 [:badge-php-versions:]: https://img.shields.io/badge/php-5.4--8.5-blue.svg
 [:badge-supported-platforms:]: https://img.shields.io/badge/platform-GNU/Linux%20|%20macOS%20|%20FreeBSD%20-yellow
 [:badge-supported-arch:]: https://img.shields.io/badge/architecture-x86--64%20|%20ARM64%20-silver
 
-[:badge-license:]:      https://img.shields.io/github/license/NoiseByNorthwest/php-spx
-[:link-license:]:       https://github.com/NoiseByNorthwest/php-spx/blob/master/LICENSE
+[:badge-license:]:      https://img.shields.io/github/license/ntm-dev/php-spx
+[:link-license:]:       https://github.com/ntm-dev/php-spx/blob/master/LICENSE
