@@ -54,7 +54,18 @@ do {                                                              \
     }                                                             \
 } while (0)
 
+#define SPX_UTILS_FILE_LINE_MAX_LEN 512
+
 int spx_utils_ip_match(const char * ip_address, const char * target);
+int spx_utils_wildcard_match(const char * str, const char * pattern);
+
+int spx_utils_file_list_lines(
+    const char * file_path,
+    void (* callback) (const char * line, void * arg),
+    void * arg
+);
+int spx_utils_file_append_line_unique(const char * file_path, const char * line);
+int spx_utils_file_remove_line(const char * file_path, const char * line);
 
 char * spx_utils_resolve_confined_file_absolute_path(
     const char * root_dir,

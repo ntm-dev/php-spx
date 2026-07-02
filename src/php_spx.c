@@ -17,6 +17,8 @@
 
 
 #include <stdio.h>
+#include <string.h>
+#include <sys/stat.h>
 
 #if ! defined(ZTS) && ! defined(_WIN32)
 #   define USE_SIGNAL
@@ -87,6 +89,9 @@ ZEND_BEGIN_MODULE_GLOBALS(spx)
     const char * http_ip_var;
     const char * http_trusted_proxies;
     const char * http_ip_whitelist;
+    const char * http_url_whitelist;
+    zend_bool http_url_whitelist_ip_check;
+    const char * http_whitelist_dir;
     const char * http_ui_assets_dir;
     const char * http_profiling_enabled;
     const char * http_profiling_auto_start;
@@ -134,6 +139,18 @@ PHP_INI_BEGIN()
         OnUpdateString, http_ip_whitelist, zend_spx_globals, spx_globals
     )
     STD_PHP_INI_ENTRY(
+        "spx.http_url_whitelist", "", PHP_INI_SYSTEM,
+        OnUpdateString, http_url_whitelist, zend_spx_globals, spx_globals
+    )
+    STD_PHP_INI_ENTRY(
+        "spx.http_url_whitelist_ip_check", "1", PHP_INI_SYSTEM,
+        OnUpdateBool, http_url_whitelist_ip_check, zend_spx_globals, spx_globals
+    )
+    STD_PHP_INI_ENTRY(
+        "spx.http_whitelist_dir", "/tmp/spx-whitelist", PHP_INI_SYSTEM,
+        OnUpdateString, http_whitelist_dir, zend_spx_globals, spx_globals
+    )
+    STD_PHP_INI_ENTRY(
         "spx.http_ui_assets_dir", SPX_HTTP_UI_ASSETS_DIR, PHP_INI_SYSTEM,
         OnUpdateString, http_ui_assets_dir, zend_spx_globals, spx_globals
     )
@@ -172,7 +189,9 @@ static PHP_FUNCTION(spx_profiler_start);
 static PHP_FUNCTION(spx_profiler_stop);
 static PHP_FUNCTION(spx_profiler_full_report_set_custom_metadata_str);
 
+static int check_ip_whitelist(void);
 static int check_access(void);
+static int check_url_whitelist(void);
 
 static void profiling_handler_init(void);
 static void profiling_handler_shutdown(void);
@@ -193,6 +212,7 @@ static void http_ui_handler_init(void);
 static void http_ui_handler_shutdown(void);
 static int  http_ui_handler_data(const char * data_dir, const char *relative_path);
 static void http_ui_handler_list_metadata_files_callback(const char * file_name, size_t count);
+static int  http_ui_handler_whitelist(const char * ini_value, const char * file_name);
 static int  http_ui_handler_output_file(const char * file_name);
 
 static void read_stream_content(FILE * stream, size_t (*callback) (const void * ptr, size_t len));
@@ -308,6 +328,14 @@ static PHP_RINIT_FUNCTION(spx)
                 SPX_CONFIG_SOURCE_INI,
                 -1
             );
+
+            /*
+                Requests targeting a whitelisted URL are automatically profiled, without requiring
+                the client to provide a matching SPX_KEY.
+            */
+            if (check_url_whitelist()) {
+                context.config.enabled = 1;
+            }
         }
     }
 
@@ -492,20 +520,35 @@ static PHP_FUNCTION(spx_profiler_full_report_set_custom_metadata_str)
     );
 }
 
-static int check_access(void)
+static void build_whitelist_file_path(const char * file_name, char * dst, size_t size)
+{
+    snprintf(dst, size, "%s/%s", SPX_G(http_whitelist_dir), file_name);
+}
+
+typedef struct {
+    const char * needle;
+    int matched;
+} match_ctx_t;
+
+static void ip_whitelist_line_match_callback(const char * line, void * arg)
+{
+    match_ctx_t * ctx = (match_ctx_t *) arg;
+    if (!ctx->matched && spx_utils_ip_match(ctx->needle, line)) {
+        ctx->matched = 1;
+    }
+}
+
+static void url_whitelist_line_match_callback(const char * line, void * arg)
+{
+    match_ctx_t * ctx = (match_ctx_t *) arg;
+    if (!ctx->matched && spx_utils_wildcard_match(ctx->needle, line)) {
+        ctx->matched = 1;
+    }
+}
+
+static int check_ip_whitelist(void)
 {
     TSRMLS_FETCH();
-
-    if (context.cli_sapi) {
-        /* CLI SAPI -> granted */
-        return 1;
-    }
-
-    if (!SPX_G(http_enabled)) {
-        /* HTTP profiling explicitly turned off -> not granted */
-
-        return 0;
-    }
 
     if (!SPX_G(http_ip_var) || SPX_G(http_ip_var)[0] == 0) {
         /* empty client ip server var name -> not granted */
@@ -552,27 +595,54 @@ static int check_access(void)
 
     const char * authorized_ips_str = SPX_G(http_ip_whitelist);
 
-    if (!authorized_ips_str || authorized_ips_str[0] == 0) {
-        /* empty ip white list -> not granted */
-        spx_php_log_notice("access not granted: IP white list is empty");
+    int ip_authorized = 0;
 
-        return 0;
+    if (authorized_ips_str && authorized_ips_str[0] != 0) {
+        SPX_UTILS_TOKENIZE_STRING(authorized_ips_str, ',', authorized_ip_str, 64, {
+            if (spx_utils_ip_match(ip_str, authorized_ip_str)) {
+                ip_authorized = 1;
+            }
+        });
     }
 
-    int ip_authorized = 0;
-    SPX_UTILS_TOKENIZE_STRING(authorized_ips_str, ',', authorized_ip_str, 64, {
-        if (spx_utils_ip_match(ip_str, authorized_ip_str)) {
-            ip_authorized = 1;
-        }
-    });
+    if (!ip_authorized) {
+        char file_path[PATH_MAX];
+        build_whitelist_file_path("ip_whitelist.txt", file_path, sizeof(file_path));
+
+        match_ctx_t ctx = { ip_str, 0 };
+        spx_utils_file_list_lines(file_path, ip_whitelist_line_match_callback, &ctx);
+        ip_authorized = ctx.matched;
+    }
 
     if (! ip_authorized) {
-        /* ip not in whitelist -> not granted */
+        /* ip not in whitelist (neither INI nor dynamic) -> not granted */
         spx_php_log_notice(
             "access not granted: \"%s\" IP is not in white list",
             ip_str
         );
 
+        return 0;
+    }
+
+    return 1;
+}
+
+static int check_access(void)
+{
+    TSRMLS_FETCH();
+
+    if (context.cli_sapi) {
+        /* CLI SAPI -> granted */
+        return 1;
+    }
+
+    if (!SPX_G(http_enabled)) {
+        /* HTTP profiling explicitly turned off -> not granted */
+
+        return 0;
+    }
+
+    if (!check_ip_whitelist()) {
         return 0;
     }
 
@@ -600,7 +670,64 @@ static int check_access(void)
         return 0;
     }
 
-    /* no matching ip in white list -> not granted */
+    return 1;
+}
+
+static int check_url_whitelist(void)
+{
+    TSRMLS_FETCH();
+
+    if (context.cli_sapi) {
+        /* CLI SAPI has no URL -> not granted through this mechanism */
+
+        return 0;
+    }
+
+    if (!SPX_G(http_enabled)) {
+        /* HTTP profiling explicitly turned off -> not granted */
+
+        return 0;
+    }
+
+    const char * request_uri = spx_php_global_array_get("_SERVER", "REQUEST_URI");
+    if (!request_uri || request_uri[0] == 0) {
+        /* empty request URI -> not granted */
+
+        return 0;
+    }
+
+    int url_matched = 0;
+
+    if (SPX_G(http_url_whitelist) && SPX_G(http_url_whitelist)[0] != 0) {
+        SPX_UTILS_TOKENIZE_STRING(SPX_G(http_url_whitelist), ',', url_pattern, 256, {
+            if (url_pattern[0] != 0 && spx_utils_wildcard_match(request_uri, url_pattern)) {
+                url_matched = 1;
+            }
+        });
+    }
+
+    if (!url_matched) {
+        char file_path[PATH_MAX];
+        build_whitelist_file_path("url_whitelist.txt", file_path, sizeof(file_path));
+
+        match_ctx_t ctx = { request_uri, 0 };
+        spx_utils_file_list_lines(file_path, url_whitelist_line_match_callback, &ctx);
+        url_matched = ctx.matched;
+    }
+
+    if (!url_matched) {
+        /* URL not in white list (neither INI nor dynamic) -> not granted */
+
+        return 0;
+    }
+
+    if (SPX_G(http_url_whitelist_ip_check) && !check_ip_whitelist()) {
+        /* URL matched but client IP is not in white list -> not granted */
+        spx_php_log_notice("access not granted (url whitelist): IP not in white list");
+
+        return 0;
+    }
+
     return 1;
 }
 
@@ -1062,7 +1189,96 @@ static int http_ui_handler_data(const char * data_dir, const char *relative_path
         return http_ui_handler_output_file(file_name);
     }
 
+    if (0 == strcmp(relative_path, "/data/whitelist/url")) {
+        return http_ui_handler_whitelist(SPX_G(http_url_whitelist), "url_whitelist.txt");
+    }
+
+    if (0 == strcmp(relative_path, "/data/whitelist/ip")) {
+        return http_ui_handler_whitelist(SPX_G(http_ip_whitelist), "ip_whitelist.txt");
+    }
+
     return -1;
+}
+
+typedef struct {
+    int count;
+} whitelist_json_ctx_t;
+
+static void http_ui_handler_whitelist_json_line_callback(const char * line, void * arg)
+{
+    whitelist_json_ctx_t * ctx = (whitelist_json_ctx_t *) arg;
+
+    if (ctx->count > 0) {
+        spx_php_output_direct_print(",");
+    }
+
+    char escaped[2 * SPX_UTILS_FILE_LINE_MAX_LEN];
+    spx_php_output_direct_print("{\"value\": \"");
+    spx_php_output_direct_print(spx_utils_json_escape(escaped, line, sizeof(escaped)));
+    spx_php_output_direct_print("\", \"source\": \"dynamic\", \"editable\": true}\n");
+
+    ctx->count++;
+}
+
+static int http_ui_handler_whitelist(const char * ini_value, const char * file_name)
+{
+    TSRMLS_FETCH();
+
+    char file_path[PATH_MAX];
+    build_whitelist_file_path(file_name, file_path, sizeof(file_path));
+
+    const char * method = spx_php_global_array_get("_SERVER", "REQUEST_METHOD");
+    if (method && 0 == strcmp(method, "POST")) {
+        const char * action = spx_php_global_array_get("_POST", "action");
+        const char * value = spx_php_global_array_get("_POST", "value");
+
+        if (!value || value[0] == 0 || strlen(value) > SPX_UTILS_FILE_LINE_MAX_LEN - 1 - 1
+            || strchr(value, '\n') || strchr(value, '\r') || strchr(value, ',')
+        ) {
+            spx_php_output_add_header_line("HTTP/1.1 400 Bad Request");
+            spx_php_output_send_headers();
+
+            return 0;
+        }
+
+        if (action && 0 == strcmp(action, "remove")) {
+            spx_utils_file_remove_line(file_path, value);
+        } else {
+            (void) mkdir(SPX_G(http_whitelist_dir), 0777);
+            spx_utils_file_append_line_unique(file_path, value);
+        }
+    }
+
+    spx_php_output_add_header_line("HTTP/1.1 200 OK");
+    spx_php_output_add_header_line("Content-Type: application/json");
+    spx_php_output_send_headers();
+
+    spx_php_output_direct_print("{\"results\": [\n");
+
+    whitelist_json_ctx_t ctx = { 0 };
+
+    if (ini_value) {
+        SPX_UTILS_TOKENIZE_STRING(ini_value, ',', ini_pattern, SPX_UTILS_FILE_LINE_MAX_LEN, {
+            if (ini_pattern[0] != 0) {
+                if (ctx.count > 0) {
+                    spx_php_output_direct_print(",");
+                }
+
+                char escaped[2 * SPX_UTILS_FILE_LINE_MAX_LEN];
+                spx_php_output_direct_print("{\"value\": \"");
+                spx_php_output_direct_print(spx_utils_json_escape(escaped, ini_pattern, sizeof(escaped)));
+                spx_php_output_direct_print("\", \"source\": \"ini\", \"editable\": false}\n");
+
+                ctx.count++;
+            }
+        });
+    }
+
+    spx_utils_file_list_lines(file_path, http_ui_handler_whitelist_json_line_callback, &ctx);
+
+    spx_php_output_direct_print("]}\n");
+
+    return 0;
 }
 
 static void http_ui_handler_list_metadata_files_callback(const char * file_name, size_t count)

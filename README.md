@@ -253,6 +253,8 @@ while ($task = get_next_ready_task()) {
 | _spx.http_ip_var_       | `REMOTE_ADDR` | _PHP_INI_SYSTEM_ | The `$_SERVER` key holding the client IP address used for authentication (see [security concern](#security-concern) for more details). Overriding the default value is required when your application is behind a reverse proxy. |
 | _spx.http_trusted_proxies_       | `127.0.0.1` | _PHP_INI_SYSTEM_ | The trusted proxy list as a comma separated list of IP addresses<b>*</b>. This setting is ignored when `spx.http_ip_var`'s value is `REMOTE_ADDR`. |
 | _spx.http_ip_whitelist_ |  | _PHP_INI_SYSTEM_ | The IP address white list used for authentication as a comma separated list of IP addresses<b>*</b>. |
+| _spx.http_url_whitelist_ |  | _PHP_INI_SYSTEM_ | A comma separated list of URL patterns (matched against `$_SERVER['REQUEST_URI']`, `*` wildcard supported, e.g. `/api/*`). Requests matching one of these patterns are automatically profiled without requiring a matching `SPX_KEY`. Requires `spx.http_enabled=1`. |
+| _spx.http_url_whitelist_ip_check_ | `1` | _PHP_INI_SYSTEM_ | Whether requests matching `spx.http_url_whitelist` must also come from an IP listed in `spx.http_ip_whitelist`. Set to `0` to auto-profile matching URLs regardless of client IP (not recommended on a publicly reachable environment). |
 | _spx.http_ui_assets_dir_ | `/usr/local/share/misc/php-spx/assets/web-ui` | _PHP_INI_SYSTEM_ | The directory where the [web UI](#web-ui) files are installed. In most cases you do not have to change it. |
 | _spx.http_profiling_enabled_ | _NULL_ | _PHP_INI_SYSTEM_ | The INI level counterpart of the `SPX_ENABLED` parameter, for HTTP requests only. See [here for more details](#available-parameters). |
 | _spx.http_profiling_auto_start_ | _NULL_ | _PHP_INI_SYSTEM_ | The INI level counterpart of the `SPX_AUTO_START` parameter, for HTTP requests only. See [here for more details](#available-parameters). |
@@ -274,6 +276,18 @@ spx.http_ip_whitelist="127.0.0.1"
 ```
 
 And then access to the web UI at `http(s)://<your application host>/?SPX_KEY=dev&SPX_UI_URI=/`.
+
+#### Auto-profiling specific URLs without a key
+
+If you want requests targeting specific endpoints to be profiled automatically, without having to add `SPX_KEY`/`SPX_ENABLED` to every request (e.g. when testing from Postman or from a client you don't control), use `spx.http_url_whitelist`:
+
+```
+spx.http_enabled=1
+spx.http_ip_whitelist="127.0.0.1"
+spx.http_url_whitelist="/api/auth/login,/api/checkout/*"
+```
+
+Any request whose `REQUEST_URI` matches one of these patterns (`*` wildcard supported) is profiled with the `full` report, without requiring `SPX_KEY`. By default the request must still originate from an IP listed in `spx.http_ip_whitelist`; set `spx.http_url_whitelist_ip_check=0` to disable that check (not recommended if the environment is publicly reachable).
 
 ### Available metrics
 

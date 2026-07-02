@@ -40,8 +40,12 @@
         <div class="pt-4  max-w-7xl mx-auto">
             <div class="grid md:grid-cols-4 gap-4 divide-x pt-6">
                 <form class="uk-form-horizontal" id="config">
+                    <select id="language-selector" class="uk-select bg-background w-36 mb-5">
+                        <option value="en">English</option>
+                        <option value="vi">Tiếng Việt</option>
+                    </select>
                     <div class="pb-2 flex flex-col">
-                        <label class="uk-form-label text-foreground pb-2"  for="cli-prefix">CLI prefix</label>
+                        <label class="uk-form-label text-foreground pb-2" id="cli-prefix-label" for="cli-prefix">CLI prefix</label>
                         <textarea class="uk-textarea" id="cli-prefix" rows="2" cols="60" readonly></textarea>
                         <div id="CLI-help-block" class="text-xs text-muted-foreground mt-2">
                             Use these parameters to profile your command line applications.
@@ -49,8 +53,50 @@
                     </div>
                     <fieldset></fieldset>
 
+                    <div class="pt-6 border-t mt-4">
+                        <label class="uk-form-label text-foreground pb-2" id="whitelist-url-title">Auto-profiled URLs</label>
+                        <div class="text-xs text-muted-foreground pb-2" id="whitelist-url-help">
+                            Requests matching one of these URL patterns are automatically profiled, without needing SPX_KEY.
+                        </div>
+                        <div class="flex gap-2 pb-2">
+                            <input type="text" id="whitelist-url-input" class="uk-input" placeholder="/api/*">
+                            <button type="button" id="whitelist-url-add" class="uk-button uk-button-primary shrink-0">Add</button>
+                        </div>
+                        <table class="uk-table uk-table-divider uk-table-small">
+                            <thead class="text-muted-foreground">
+                                <tr>
+                                    <th id="whitelist-col-value">Value</th>
+                                    <th id="whitelist-col-source" width="90px">Source</th>
+                                    <th width="70px"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="whitelist-url-table"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="pt-6">
+                        <label class="uk-form-label text-foreground pb-2" id="whitelist-ip-title">Whitelisted IPs</label>
+                        <div class="text-xs text-muted-foreground pb-2" id="whitelist-ip-help">
+                            Client IPs allowed to access the web UI / auto-profiled URLs above.
+                        </div>
+                        <div class="flex gap-2 pb-2">
+                            <input type="text" id="whitelist-ip-input" class="uk-input" placeholder="127.0.0.1">
+                            <button type="button" id="whitelist-ip-add" class="uk-button uk-button-primary shrink-0">Add</button>
+                        </div>
+                        <table class="uk-table uk-table-divider uk-table-small">
+                            <thead class="text-muted-foreground">
+                                <tr>
+                                    <th id="whitelist-col-value-2">Value</th>
+                                    <th id="whitelist-col-source-2" width="90px">Source</th>
+                                    <th width="70px"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="whitelist-ip-table"></tbody>
+                        </table>
+                    </div>
+
                     <div class="pt-4 text-xs text-muted-foreground">
-                        Powered by <a href="https://github.com/NoiseByNorthwest/php-spx" style="text-decoration: underline;">SPX</a>
+                        <span id="powered-by-label">Powered by</span> <a href="https://github.com/NoiseByNorthwest/php-spx" style="text-decoration: underline;">SPX</a>
                     </div>
                 </form>
 
@@ -80,157 +126,449 @@
             const {getCookieVar, setCookieVar} = await import(getImportUrl('/js/utils.js'));
             const fmt = await import(getImportUrl('/js/fmt.js'));
 
+            const translations = {
+                en: {
+                    cliPrefix: 'CLI prefix',
+                    cliHelp: 'Use these parameters to profile your command line applications.',
+                    poweredBy: 'Powered by',
+                    parameters: {
+                        SPX_ENABLED: {
+                            label: 'Enabled',
+                            description: 'Whether to enable SPX profiler for your current browser session. No performance impact for other clients.',
+                        },
+                        SPX_AUTO_START: {
+                            label: 'Automatic start',
+                            description: 'Whether to enable SPX profiler\'s automatic start. When automatic start is disabled, you have to start & stop profiling on your own at runtime via the `spx_profiler_start()` & `spx_profiler_stop()` functions.',
+                        },
+                        SPX_BUILTINS: {
+                            label: 'Profile internal functions',
+                            description: 'Whether to profile internal functions. It is not recommended to profile internal functions if you want to accurately find a time bottleneck.',
+                        },
+                        SPX_SAMPLING_PERIOD: {
+                            label: 'Sampling',
+                            description: 'Whether to collect data for the current call stack at regular intervals according to the specified sampling period. The result will usually be less accurate but in some cases it could be far more accurate by not over-evaluating small functions called many times. It is recommended to try sampling (with different periods) if you want to accurately find a time bottleneck. When profiling a long running & CPU intensive script, this option will also allow you to contain report size and thus keeping it small enough to be exploitable through the analysis screen.',
+                            disabledLabel: 'Disabled',
+                        },
+                        SPX_DEPTH: {
+                            label: 'Max profiling depth',
+                            description: 'The stack depth at which profiling must stop (i.e. aggregate measures of deeper calls).',
+                            unlimitedLabel: 'Unlimited',
+                        },
+                        SPX_METRICS: {
+                            label: 'Additional metrics',
+                            description: 'List of available metrics to collect in addition to Wall time and Zend Engine memory usage. It is not recommended to collect additional metrics if you want to accurately find a time bottleneck.',
+                        },
+                    },
+                    metricDescriptions: {
+                        ct: 'Actual CPU time spent processing (excludes waiting).',
+                        it: 'Idle/waiting time (I/O, sleep...). Equal to wall time minus CPU time.',
+                        zmac: 'Number of memory allocations made by the Zend Engine.',
+                        zmab: 'Number of bytes allocated by the Zend Engine.',
+                        zmfc: 'Number of memory frees made by the Zend Engine.',
+                        zmfb: 'Number of bytes freed by the Zend Engine.',
+                        zgr: 'Number of garbage collector runs.',
+                        zgb: 'Length of the garbage collector root buffer.',
+                        zgc: 'Number of reference cycles collected by the garbage collector.',
+                        zif: 'Number of files included/required.',
+                        zil: 'Number of lines of code included.',
+                        zuc: 'Number of user-defined classes.',
+                        zuf: 'Number of user-defined functions.',
+                        zuo: 'Number of opcodes compiled/executed.',
+                        zo: 'Number of live objects.',
+                        ze: 'Number of PHP errors raised.',
+                        mor: 'Resident memory (RSS) used by the PHP process itself.',
+                        io: 'Total I/O bytes (reads + writes).',
+                        ior: 'Bytes read via I/O.',
+                        iow: 'Bytes written via I/O.',
+                    },
+                    whitelist: {
+                        urlTitle: 'Auto-profiled URLs',
+                        urlHelp: 'Requests matching one of these URL patterns are automatically profiled, without needing SPX_KEY.',
+                        urlPlaceholder: '/api/*',
+                        ipTitle: 'Whitelisted IPs',
+                        ipHelp: 'Client IPs allowed to access the web UI / auto-profiled URLs above.',
+                        ipPlaceholder: '127.0.0.1',
+                        add: 'Add',
+                        remove: 'Remove',
+                        colValue: 'Value',
+                        colSource: 'Source',
+                        sourceIni: 'php.ini',
+                        sourceDynamic: 'dynamic',
+                    },
+                },
+                vi: {
+                    cliPrefix: 'Tiền tố dòng lệnh',
+                    cliHelp: 'Dùng các tham số này để profile ứng dụng dòng lệnh (CLI) của bạn.',
+                    poweredBy: 'Phát triển dựa trên',
+                    parameters: {
+                        SPX_ENABLED: {
+                            label: 'Kích hoạt',
+                            description: 'Bật SPX profiler cho phiên trình duyệt hiện tại của bạn. Không ảnh hưởng hiệu năng đến các client khác.',
+                        },
+                        SPX_AUTO_START: {
+                            label: 'Tự động bắt đầu',
+                            description: 'Bật tính năng tự động bắt đầu của SPX profiler. Khi tắt, bạn phải tự bắt đầu & dừng profiling lúc runtime thông qua hàm `spx_profiler_start()` & `spx_profiler_stop()`.',
+                        },
+                        SPX_BUILTINS: {
+                            label: 'Profile hàm nội bộ (built-in)',
+                            description: 'Bật profiling cho các hàm nội bộ (built-in) của PHP. Không nên bật nếu bạn muốn xác định chính xác điểm nghẽn thời gian.',
+                        },
+                        SPX_SAMPLING_PERIOD: {
+                            label: 'Lấy mẫu (Sampling)',
+                            description: 'Thu thập dữ liệu của call stack hiện tại theo chu kỳ lấy mẫu đã chỉ định, thay vì đo từng lệnh gọi. Kết quả thường kém chính xác hơn, nhưng đôi khi lại chính xác hơn do không đánh giá quá mức các hàm nhỏ được gọi nhiều lần. Nên thử với các chu kỳ khác nhau nếu bạn muốn tìm điểm nghẽn thời gian chính xác. Khi profile một script chạy lâu & tốn nhiều CPU, tùy chọn này cũng giúp giới hạn kích thước report để có thể phân tích được trên màn hình phân tích.',
+                            disabledLabel: 'Tắt',
+                        },
+                        SPX_DEPTH: {
+                            label: 'Độ sâu profiling tối đa',
+                            description: 'Độ sâu của call stack mà tại đó profiling phải dừng lại (tức các lệnh gọi sâu hơn sẽ được gộp chung).',
+                            unlimitedLabel: 'Không giới hạn',
+                        },
+                        SPX_METRICS: {
+                            label: 'Chỉ số bổ sung',
+                            description: 'Danh sách các chỉ số (metric) có thể thu thập thêm ngoài Wall time và ZE memory usage. Không nên bật thêm chỉ số nếu bạn muốn xác định chính xác điểm nghẽn thời gian.',
+                        },
+                    },
+                    metricDescriptions: {
+                        ct: 'Thời gian CPU thực sự xử lý (không tính thời gian chờ).',
+                        it: 'Thời gian chờ (I/O, sleep...). Bằng wall time trừ đi CPU time.',
+                        zmac: 'Số lần Zend Engine cấp phát bộ nhớ.',
+                        zmab: 'Số byte đã được Zend Engine cấp phát.',
+                        zmfc: 'Số lần Zend Engine giải phóng bộ nhớ.',
+                        zmfb: 'Số byte đã được giải phóng.',
+                        zgr: 'Số lần garbage collector chạy.',
+                        zgb: 'Độ dài root buffer của garbage collector.',
+                        zgc: 'Số chu trình tham chiếu (cycle) đã được garbage collector thu hồi.',
+                        zif: 'Số file đã include/require.',
+                        zil: 'Số dòng code đã include.',
+                        zuc: 'Số class do người dùng định nghĩa.',
+                        zuf: 'Số hàm do người dùng định nghĩa.',
+                        zuo: 'Số opcode đã biên dịch/thực thi.',
+                        zo: 'Số object đang tồn tại.',
+                        ze: 'Số lỗi PHP đã xảy ra.',
+                        mor: 'Bộ nhớ thực (RSS) mà chính tiến trình PHP sử dụng.',
+                        io: 'Tổng số byte đọc + ghi qua I/O.',
+                        ior: 'Số byte đã đọc qua I/O.',
+                        iow: 'Số byte đã ghi qua I/O.',
+                    },
+                    whitelist: {
+                        urlTitle: 'URL tự động profile',
+                        urlHelp: 'Request khớp với các URL pattern này sẽ tự động được profile, không cần SPX_KEY.',
+                        urlPlaceholder: '/api/*',
+                        ipTitle: 'IP được whitelist',
+                        ipHelp: 'Các IP client được phép truy cập web UI / các URL tự động profile ở trên.',
+                        ipPlaceholder: '127.0.0.1',
+                        add: 'Thêm',
+                        remove: 'Xóa',
+                        colValue: 'Giá trị',
+                        colSource: 'Nguồn',
+                        sourceIni: 'php.ini',
+                        sourceDynamic: 'động',
+                    },
+                },
+            };
+
+            function detectLang() {
+                const stored = localStorage.getItem('spx-lang');
+                if (stored && translations[stored]) {
+                    return stored;
+                }
+
+                return (navigator.language || '').toLowerCase().startsWith('vi') ? 'vi' : 'en';
+            }
+
+            let currentLang = detectLang();
+
             $(() => {
                 fetch('?SPX_UI_URI=/data/metrics', {credentials: "same-origin"})
                     .then(response => response.json())
                     .then(response => {
                         const metrics = response.results;
 
-                        const parameters = [
-                            {
-                                key: 'SPX_ENABLED',
-                                label: 'Enabled',
-                                type: 'switch',
-                                defaultValue: '0',
-                                description: 'Whether to enable SPX profiler for your current browser session. No performance impact for other clients.',
-                            },
-                            {
-                                key: 'SPX_AUTO_START',
-                                label: 'Automatic start',
-                                type: 'switch',
-                                defaultValue: '1',
-                                description: 'Whether to enable SPX profiler\'s automatic start. When automatic start is disabled, you have to start & stop profiling on your own at runtime via the `spx_profiler_start()` & `spx_profiler_stop()` functions.',
-                            },
-                            {
-                                key: 'SPX_BUILTINS',
-                                label: 'Profile internal functions',
-                                type: 'switch',
-                                defaultValue: '0',
-                                description: 'Whether to profile internal functions. It is not recommended to profile internal functions if you want to accurately find a time bottleneck.',
-                            },
-                            {
-                                key: 'SPX_SAMPLING_PERIOD',
-                                label: 'Sampling',
-                                type: 'choice',
-                                choice: {
-                                    multi: false,
-                                    values: [
-                                        {key: '0',    label: 'Disabled'},
-                                        {key: '5',    label: '5us'},
-                                        {key: '10',   label: '10us'},
-                                        {key: '20',   label: '20us'},
-                                        {key: '50',   label: '50us'},
-                                        {key: '100',  label: '100us'},
-                                        {key: '200',  label: '200us'},
-                                        {key: '500',  label: '500us'},
-                                        {key: '1000', label: '1ms'},
-                                        {key: '2000', label: '2ms'},
-                                        {key: '5000', label: '5ms'},
-                                    ],
-                                },
-                                defaultValue: '0',
-                                description: 'Whether to collect data for the current call stack at regular intervals according to the specified sampling period. The result will usually be less accurate but in some cases it could be far more accurate by not over-evaluating small functions called many times. It is recommended to try sampling (with different periods) if you want to accurately find a time bottleneck. When profiling a long running & CPU intensive script, this option will also allow you to contain report size and thus keeping it small enough to be exploitable through the analysis screen.',
-                            },
-                            {
-                                key: 'SPX_DEPTH',
-                                label: 'Max profiling depth',
-                                type: 'choice',
-                                choice: {
-                                    multi: false,
-                                    values: Array
-                                        .from(Array(10).keys(), e => e != 0 ? e : Number.POSITIVE_INFINITY)
-                                        .sort()
-                                        .reverse()
-                                        .map(e => e == Number.POSITIVE_INFINITY ? 0 : e)
-                                        .map(e => ({
-                                            key: '' + e,
-                                            label: '' + (e == 0 ? 'Unlimited' : e),
-                                        }))
-                                    ,
-                                },
-                                defaultValue: '0',
-                                description: 'The stack depth at which profiling must stop (i.e. aggregate measures of deeper calls).',
-                            },
-                            {
-                                key: 'SPX_METRICS',
-                                label: 'Additional metrics',
-                                type: 'choice',
-                                choice: {
-                                    multi: true,
-                                    values: metrics
-                                        .filter(e => e.key != 'wt' && e.key != 'zm')
-                                        .map(e => ({
-                                            key: e.key,
-                                            label: e.name,
-                                        }))
-                                    ,
-                                },
-                                defaultValue: '',
-                                description: 'List of available metrics to collect in addition to Wall time and Zend Engine memory usage. It is not recommended to collect additional metrics if you want to accurately find a time bottleneck.',
-                            },
-                        ];
+                        function buildParameters(lang) {
+                            const t = translations[lang].parameters;
 
-                        let $fieldSet = $($('#config > fieldset')[0]);
-                        $.each(parameters, (_, parameter) => {
-                            let html = '<div class="mt-6">';
-                            if (parameter.type != 'choice') {
-                                html += `<div class="flex items-center justify-between gap-3 pb-2">`;
-                            } else {
-                                html += `<div class="pb-2">`;
+                            return [
+                                {
+                                    key: 'SPX_ENABLED',
+                                    label: t.SPX_ENABLED.label,
+                                    type: 'switch',
+                                    defaultValue: '0',
+                                    description: t.SPX_ENABLED.description,
+                                },
+                                {
+                                    key: 'SPX_AUTO_START',
+                                    label: t.SPX_AUTO_START.label,
+                                    type: 'switch',
+                                    defaultValue: '1',
+                                    description: t.SPX_AUTO_START.description,
+                                },
+                                {
+                                    key: 'SPX_BUILTINS',
+                                    label: t.SPX_BUILTINS.label,
+                                    type: 'switch',
+                                    defaultValue: '0',
+                                    description: t.SPX_BUILTINS.description,
+                                },
+                                {
+                                    key: 'SPX_SAMPLING_PERIOD',
+                                    label: t.SPX_SAMPLING_PERIOD.label,
+                                    type: 'choice',
+                                    choice: {
+                                        multi: false,
+                                        values: [
+                                            {key: '0',    label: t.SPX_SAMPLING_PERIOD.disabledLabel},
+                                            {key: '5',    label: '5us'},
+                                            {key: '10',   label: '10us'},
+                                            {key: '20',   label: '20us'},
+                                            {key: '50',   label: '50us'},
+                                            {key: '100',  label: '100us'},
+                                            {key: '200',  label: '200us'},
+                                            {key: '500',  label: '500us'},
+                                            {key: '1000', label: '1ms'},
+                                            {key: '2000', label: '2ms'},
+                                            {key: '5000', label: '5ms'},
+                                        ],
+                                    },
+                                    defaultValue: '0',
+                                    description: t.SPX_SAMPLING_PERIOD.description,
+                                },
+                                {
+                                    key: 'SPX_DEPTH',
+                                    label: t.SPX_DEPTH.label,
+                                    type: 'choice',
+                                    choice: {
+                                        multi: false,
+                                        values: Array
+                                            .from(Array(10).keys(), e => e != 0 ? e : Number.POSITIVE_INFINITY)
+                                            .sort()
+                                            .reverse()
+                                            .map(e => e == Number.POSITIVE_INFINITY ? 0 : e)
+                                            .map(e => ({
+                                                key: '' + e,
+                                                label: '' + (e == 0 ? t.SPX_DEPTH.unlimitedLabel : e),
+                                            }))
+                                        ,
+                                    },
+                                    defaultValue: '0',
+                                    description: t.SPX_DEPTH.description,
+                                },
+                                {
+                                    key: 'SPX_METRICS',
+                                    label: t.SPX_METRICS.label,
+                                    type: 'choice',
+                                    choice: {
+                                        multi: true,
+                                        values: metrics
+                                            .filter(e => e.key != 'wt' && e.key != 'zm')
+                                            .map(e => ({
+                                                key: e.key,
+                                                label: e.name,
+                                            }))
+                                        ,
+                                    },
+                                    defaultValue: '',
+                                    description: t.SPX_METRICS.description,
+                                },
+                            ];
+                        }
+
+                        let parameters = buildParameters(currentLang);
+
+                        const whitelistData = { url: [], ip: [] };
+
+                        function renderWhitelistTable(type, results) {
+                            const t = translations[currentLang].whitelist;
+                            const $tbody = $('#whitelist-' + type + '-table');
+                            $tbody.empty();
+
+                            $.each(results, (_, entry) => {
+                                const $row = $('<tr>');
+                                $row.append($('<td>').addClass('breakable-text').text(entry.value));
+                                $row.append(
+                                    $('<td>').text(entry.source === 'ini' ? t.sourceIni : t.sourceDynamic)
+                                );
+
+                                const $actionCell = $('<td>');
+                                if (entry.editable) {
+                                    $('<button>')
+                                        .attr('type', 'button')
+                                        .attr('title', t.remove)
+                                        .attr('aria-label', t.remove)
+                                        .addClass('uk-icon-button')
+                                        .css({ width: '1.75rem', height: '1.75rem', color: '#dc2626' })
+                                        .html(
+                                            '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" '
+                                            + 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+                                            + 'stroke-linecap="round" stroke-linejoin="round">'
+                                            + '<path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>'
+                                            + '<path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>'
+                                            + '<line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>'
+                                            + '</svg>'
+                                        )
+                                        .on('click', () => removeWhitelistEntry(type, entry.value))
+                                        .appendTo($actionCell);
+                                }
+                                $row.append($actionCell);
+
+                                $tbody.append($row);
+                            });
+                        }
+
+                        function loadWhitelist(type) {
+                            return fetch('?SPX_UI_URI=/data/whitelist/' + type, {credentials: "same-origin"})
+                                .then(response => response.json())
+                                .then(data => {
+                                    whitelistData[type] = data.results;
+                                    renderWhitelistTable(type, whitelistData[type]);
+                                });
+                        }
+
+                        function submitWhitelistEntry(type, action, value) {
+                            return fetch('?SPX_UI_URI=/data/whitelist/' + type, {
+                                method: 'POST',
+                                credentials: "same-origin",
+                                body: new URLSearchParams({ action, value }),
+                            })
+                                .then(response => response.json())
+                                .then(data => {
+                                    whitelistData[type] = data.results;
+                                    renderWhitelistTable(type, whitelistData[type]);
+                                });
+                        }
+
+                        function addWhitelistEntry(type) {
+                            const $input = $('#whitelist-' + type + '-input');
+                            const value = $input.val().trim();
+                            if (!value) {
+                                return;
                             }
-                            html += `<label class="uk-form-label text-foreground" for="${parameter.key}">${parameter.label}</label>`;
 
-                            switch (parameter.type) {
-                                case 'switch':
-                                    html += `<input class="uk-toggle-switch uk-toggle-switch-primary" id="${parameter.key}" type="checkbox" />`;
-                                    break;
+                            submitWhitelistEntry(type, 'add', value).then(() => $input.val(''));
+                        }
 
-                                case 'choice':
-                                    let size = Math.max(5, parseInt(parameter.choice.values.length * 0.7));
-                                    html +=
-                                        '<select class="uk-select" id="'+ parameter.key + '" '
-                                            + (
-                                                parameter.choice.multi
-                                                    ? 'multiple size="' + size + '"'
-                                                    : ''
-                                            ) + '>'
-                                    ;
+                        function removeWhitelistEntry(type, value) {
+                            submitWhitelistEntry(type, 'remove', value);
+                        }
 
-                                    $.each(parameter.choice.values, (_, e) => {
-                                        html += '<option value="' + e.key + '">' + e.label + '</option>';
-                                    });
-
-                                    html += '</select>';
-                                    break;
-                            }
-
-                            html += '</div>';
-                            html += `<div id="${parameter.key}-help-block" class="text-xs text-muted-foreground">
-                            ${parameter.description}
-                            </div>`;
-                            $fieldSet.append(html);
+                        $.each(['url', 'ip'], (_, type) => {
+                            $('#whitelist-' + type + '-add').on('click', () => addWhitelistEntry(type));
+                            $('#whitelist-' + type + '-input').on('keydown', (e) => {
+                                if (e.key === 'Enter' || e.keyCode === 13) {
+                                    e.preventDefault();
+                                    addWhitelistEntry(type);
+                                }
+                            });
                         });
 
-                        $.each(parameters, (_, parameter) => {
-                            let value = getCookieVar(parameter.key) || parameter.defaultValue;
-                            switch (parameter.type) {
-                                case 'switch':
-                                    $('#' + parameter.key).prop('checked', value != '0');
+                        function applyStoredValues() {
+                            $.each(parameters, (_, parameter) => {
+                                let value = getCookieVar(parameter.key) || parameter.defaultValue;
+                                switch (parameter.type) {
+                                    case 'switch':
+                                        $('#' + parameter.key).prop('checked', value != '0');
 
-                                    break;
+                                        break;
 
-                                case 'choice':
-                                    $('#' + parameter.key + ' > option').each((_, e) => {
-                                        $(e).prop('selected', false);
-                                    });
+                                    case 'choice':
+                                        $('#' + parameter.key + ' > option').each((_, e) => {
+                                            $(e).prop('selected', false);
+                                        });
 
-                                    $.each(value.split(','), (_, e) => {
-                                        $('#' + parameter.key + ' option[value="' + e + '"]').prop('selected', true);
-                                    });
+                                        $.each(value.split(','), (_, e) => {
+                                            $('#' + parameter.key + ' option[value="' + e + '"]').prop('selected', true);
+                                        });
 
-                                    break;
-                            }
-                        });
+                                        break;
+                                }
+                            });
+                        }
+
+                        function renderConfigForm(lang) {
+                            currentLang = lang;
+                            parameters = buildParameters(lang);
+
+                            const t = translations[lang];
+                            document.documentElement.lang = lang;
+                            $('#language-selector').val(lang);
+                            $('#cli-prefix-label').text(t.cliPrefix);
+                            $('#CLI-help-block').text(t.cliHelp);
+                            $('#powered-by-label').text(t.poweredBy);
+
+                            $('#whitelist-url-title').text(t.whitelist.urlTitle);
+                            $('#whitelist-url-help').text(t.whitelist.urlHelp);
+                            $('#whitelist-url-input').attr('placeholder', t.whitelist.urlPlaceholder);
+                            $('#whitelist-url-add').text(t.whitelist.add);
+                            $('#whitelist-ip-title').text(t.whitelist.ipTitle);
+                            $('#whitelist-ip-help').text(t.whitelist.ipHelp);
+                            $('#whitelist-ip-input').attr('placeholder', t.whitelist.ipPlaceholder);
+                            $('#whitelist-ip-add').text(t.whitelist.add);
+                            $('#whitelist-col-value, #whitelist-col-value-2').text(t.whitelist.colValue);
+                            $('#whitelist-col-source, #whitelist-col-source-2').text(t.whitelist.colSource);
+                            renderWhitelistTable('url', whitelistData.url);
+                            renderWhitelistTable('ip', whitelistData.ip);
+
+                            let $fieldSet = $($('#config > fieldset')[0]);
+                            $fieldSet.empty();
+                            $.each(parameters, (_, parameter) => {
+                                let html = '<div class="mt-6">';
+                                if (parameter.type != 'choice') {
+                                    html += `<div class="flex items-center justify-between gap-3 pb-2">`;
+                                } else {
+                                    html += `<div class="pb-2">`;
+                                }
+                                html += `<label class="uk-form-label text-foreground" for="${parameter.key}">${parameter.label}</label>`;
+
+                                switch (parameter.type) {
+                                    case 'switch':
+                                        html += `<input class="uk-toggle-switch uk-toggle-switch-primary" id="${parameter.key}" type="checkbox" />`;
+                                        break;
+
+                                    case 'choice':
+                                        let size = Math.max(5, parseInt(parameter.choice.values.length * 0.7));
+                                        html +=
+                                            '<select class="uk-select" id="'+ parameter.key + '" '
+                                                + (
+                                                    parameter.choice.multi
+                                                        ? 'multiple size="' + size + '"'
+                                                        : ''
+                                                ) + '>'
+                                        ;
+
+                                        $.each(parameter.choice.values, (_, e) => {
+                                            html += '<option value="' + e.key + '">' + e.label + '</option>';
+                                        });
+
+                                        html += '</select>';
+
+                                        if (parameter.key === 'SPX_METRICS') {
+                                            const metricDescriptions = translations[lang].metricDescriptions;
+                                            html += '<div class="mt-2 space-y-1">';
+                                            $.each(parameter.choice.values, (_, e) => {
+                                                const desc = metricDescriptions[e.key];
+                                                if (!desc) {
+                                                    return;
+                                                }
+
+                                                html += `<div class="text-xs"><span class="font-medium text-foreground">${e.label}</span> <span class="text-muted-foreground">— ${desc}</span></div>`;
+                                            });
+                                            html += '</div>';
+                                        }
+
+                                        break;
+                                }
+
+                                html += '</div>';
+                                html += `<div id="${parameter.key}-help-block" class="text-xs text-muted-foreground">
+                                ${parameter.description}
+                                </div>`;
+                                $fieldSet.append(html);
+                            });
+
+                            applyStoredValues();
+                            $('#config').trigger('blur');
+                        }
+
+                        $('#config').on('submit', (e) => e.preventDefault());
 
                         $('#config').on('click blur change', () => {
                             let cliParameters = ['SPX_REPORT=full'];
@@ -261,14 +599,21 @@
                             $('#cli-prefix').val(cliParameters.join(' '));
                         });
 
-                        $('#config').trigger('blur');
+                        $('#language-selector').val(currentLang);
+                        $('#language-selector').on('change', function () {
+                            const lang = $(this).val();
+                            localStorage.setItem('spx-lang', lang);
+                            renderConfigForm(lang);
+                        });
+
+                        renderConfigForm(currentLang);
+                        loadWhitelist('url');
+                        loadWhitelist('ip');
 
                         return fetch('?SPX_UI_URI=/data/reports/metadata', {credentials: "same-origin"});
                     })
                     .then(response => response.json())
                     .then(data => {
-                        data.results = data.results.filter(result => result.http_host == document.location.host)
-                        
                         makeDataTable(
                             'reports',
                             {

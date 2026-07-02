@@ -415,6 +415,7 @@ class Widget {
         this.colorSchemeMode = null;
         this.highlightedFunctionName = null;
         this.searchQuery = null;
+        this.hideVendor = false;
         this.functionColorResolver = (functionName, defaultColor) => {
             let color;
             switch (this.colorSchemeMode) {
@@ -482,6 +483,11 @@ class Widget {
             this.searchQuery = null;
             $('#search_query').val(null);
             $('#search_query_button_clear').css('display', 'none');
+            this.repaint();
+        });
+
+        $(window).on('spx-hide-vendor-toggle', (e, hideVendor) => {
+            this.hideVendor = hideVendor;
             this.repaint();
         });
 
@@ -1690,6 +1696,9 @@ export class FlatProfile extends Widget {
             .getValues()
             .filter(stats => !(
                 this.searchQuery && (stats.functionName.toLowerCase()).indexOf(this.searchQuery.toLowerCase()) < 0
+            ))
+            .filter(stats => !(
+                this.hideVendor && stats.functionName.toLowerCase().indexOf('vendor/') > -1
             ));
 
         functionsStats.sort((a, b) => {

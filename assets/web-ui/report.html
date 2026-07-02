@@ -63,6 +63,12 @@
                     </a>
                 </div>
             </div>
+            <div id="hide-vendor-container" class="widget" style="flex: 0 0 auto;">
+                <button id="hide-vendor-toggle" type="button" class="uk-button uk-button-default"
+                    title="Hide functions from vendor/ files">
+                    Hide vendor
+                </button>
+            </div>
             <div id="color-scale" class="widget rounded-sm overflow-hidden text-gray-900" style="flex: 1 1 150px;">
             </div>
         </div>
@@ -114,6 +120,12 @@
 
             const key = m[1];
             let profileDataBuilder = null;
+
+            $('#hide-vendor-toggle').on('click', function () {
+                const hideVendor = !$(this).hasClass('uk-active');
+                $(this).toggleClass('uk-active', hideVendor);
+                $(window).trigger('spx-hide-vendor-toggle', [hideVendor]);
+            });
 
             const initDialog = {
                 container: $('#init-report'),

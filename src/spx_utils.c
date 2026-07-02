@@ -25,6 +25,7 @@
 #endif
 
 #include <arpa/inet.h>
+#include <sys/file.h>
 
 #include "spx_utils.h"
 #include "spx_php.h"
@@ -84,6 +85,156 @@ int spx_utils_ip_match(const char * ip_address_str, const char * target)
     }
 
     return 0;
+}
+
+int spx_utils_wildcard_match(const char * str, const char * pattern)
+{
+    const char * s = str;
+    const char * p = pattern;
+    const char * star_p = NULL;
+    const char * star_s = NULL;
+
+    while (*s) {
+        if (*p == '*') {
+            star_p = p++;
+            star_s = s;
+        } else if (*p == *s) {
+            p++;
+            s++;
+        } else if (star_p) {
+            p = star_p + 1;
+            s = ++star_s;
+        } else {
+            return 0;
+        }
+    }
+
+    while (*p == '*') {
+        p++;
+    }
+
+    return *p == 0;
+}
+
+static char * chomp(char * line)
+{
+    size_t len = strlen(line);
+    while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r')) {
+        line[--len] = 0;
+    }
+
+    return line;
+}
+
+int spx_utils_file_list_lines(
+    const char * file_path,
+    void (* callback) (const char * line, void * arg),
+    void * arg
+) {
+    FILE * fp = fopen(file_path, "r");
+    if (!fp) {
+        /* the file may simply not exist yet -> empty list, not an error */
+        return 0;
+    }
+
+    if (flock(fileno(fp), LOCK_SH) != 0) {
+        fclose(fp);
+
+        return -1;
+    }
+
+    char line[SPX_UTILS_FILE_LINE_MAX_LEN];
+    while (fgets(line, sizeof(line), fp) != NULL) {
+        chomp(line);
+
+        if (line[0] != 0) {
+            callback(line, arg);
+        }
+    }
+
+    flock(fileno(fp), LOCK_UN);
+    fclose(fp);
+
+    return 0;
+}
+
+int spx_utils_file_append_line_unique(const char * file_path, const char * line)
+{
+    FILE * fp = fopen(file_path, "a+");
+    if (!fp) {
+        return -1;
+    }
+
+    if (flock(fileno(fp), LOCK_EX) != 0) {
+        fclose(fp);
+
+        return -1;
+    }
+
+    rewind(fp);
+
+    char existing_line[SPX_UTILS_FILE_LINE_MAX_LEN];
+    while (fgets(existing_line, sizeof(existing_line), fp) != NULL) {
+        if (0 == strcmp(chomp(existing_line), line)) {
+            /* already present -> nothing to do */
+            flock(fileno(fp), LOCK_UN);
+            fclose(fp);
+
+            return 0;
+        }
+    }
+
+    fseek(fp, 0, SEEK_END);
+    fprintf(fp, "%s\n", line);
+
+    flock(fileno(fp), LOCK_UN);
+    fclose(fp);
+
+    return 0;
+}
+
+int spx_utils_file_remove_line(const char * file_path, const char * line)
+{
+    FILE * fp = fopen(file_path, "r+");
+    if (!fp) {
+        /* nothing to remove */
+        return 0;
+    }
+
+    if (flock(fileno(fp), LOCK_EX) != 0) {
+        fclose(fp);
+
+        return -1;
+    }
+
+    char tmp_file_path[PATH_MAX];
+    snprintf(tmp_file_path, sizeof(tmp_file_path), "%s.tmp", file_path);
+
+    FILE * tmp_fp = fopen(tmp_file_path, "w");
+    if (!tmp_fp) {
+        flock(fileno(fp), LOCK_UN);
+        fclose(fp);
+
+        return -1;
+    }
+
+    char existing_line[SPX_UTILS_FILE_LINE_MAX_LEN];
+    while (fgets(existing_line, sizeof(existing_line), fp) != NULL) {
+        chomp(existing_line);
+
+        if (existing_line[0] != 0 && 0 != strcmp(existing_line, line)) {
+            fprintf(tmp_fp, "%s\n", existing_line);
+        }
+    }
+
+    fclose(tmp_fp);
+
+    const int renamed = (0 == rename(tmp_file_path, file_path));
+
+    flock(fileno(fp), LOCK_UN);
+    fclose(fp);
+
+    return renamed ? 0 : -1;
 }
 
 char * spx_utils_resolve_confined_file_absolute_path(
