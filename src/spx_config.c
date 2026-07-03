@@ -194,7 +194,14 @@ static void source_data_get(source_data_t * source_data, source_handler_t handle
 
 static void source_data_to_config(const source_data_t * source_data, spx_config_t * config)
 {
-    if (source_data->enabled_str) {
+    /*
+        An unset PHP_INI_SYSTEM entry (registered with a NULL default, e.g. spx.http_profiling_auto_start)
+        is returned by zend_ini_string() as an empty string, not NULL. Boolean flags below must treat that
+        empty string the same as "not provided" (str[0] check), otherwise a request that never went through
+        the INI source before (e.g. one auto-profiled via the URL/IP whitelist, which re-reads config from
+        INI only) would have auto_start silently forced to 0 instead of keeping its init_config() default of 1.
+    */
+    if (source_data->enabled_str && source_data->enabled_str[0]) {
         config->enabled = *source_data->enabled_str == '1' ? 1 : 0;
     }
 
@@ -206,7 +213,7 @@ static void source_data_to_config(const source_data_t * source_data, spx_config_
         config->ui_uri = source_data->ui_uri_str;
     }
 
-    if (source_data->auto_start_str) {
+    if (source_data->auto_start_str && source_data->auto_start_str[0]) {
         config->auto_start = *source_data->auto_start_str == '1' ? 1 : 0;
     }
 
@@ -214,7 +221,7 @@ static void source_data_to_config(const source_data_t * source_data, spx_config_
         config->sampling_period = atoi(source_data->sampling_period_str);
     }
 
-    if (source_data->builtins_str) {
+    if (source_data->builtins_str && source_data->builtins_str[0]) {
         config->builtins = *source_data->builtins_str == '1' ? 1 : 0;
     }
 
@@ -252,11 +259,11 @@ static void source_data_to_config(const source_data_t * source_data, spx_config_
         }
     }
 
-    if (source_data->fp_inc_str) {
+    if (source_data->fp_inc_str && source_data->fp_inc_str[0]) {
         config->fp_inc = *source_data->fp_inc_str == '1' ? 1 : 0;
     }
 
-    if (source_data->fp_rel_str) {
+    if (source_data->fp_rel_str && source_data->fp_rel_str[0]) {
         config->fp_rel = *source_data->fp_rel_str == '1' ? 1 : 0;
     }
 
@@ -264,11 +271,11 @@ static void source_data_to_config(const source_data_t * source_data, spx_config_
         config->fp_limit = atoi(source_data->fp_limit_str);
     }
 
-    if (source_data->fp_live_str) {
+    if (source_data->fp_live_str && source_data->fp_live_str[0]) {
         config->fp_live = *source_data->fp_live_str == '1' ? 1 : 0;
     }
 
-    if (source_data->fp_color_str) {
+    if (source_data->fp_color_str && source_data->fp_color_str[0]) {
         config->fp_color = *source_data->fp_color_str == '1' ? 1 : 0;
     }
 
@@ -276,7 +283,7 @@ static void source_data_to_config(const source_data_t * source_data, spx_config_
         config->trace_file = source_data->trace_file;
     }
 
-    if (source_data->trace_safe_str) {
+    if (source_data->trace_safe_str && source_data->trace_safe_str[0]) {
         config->trace_safe = *source_data->trace_safe_str == '1' ? 1 : 0;
     }
 }
