@@ -100,7 +100,13 @@
                     </div>
                 </form>
 
-                <div class="col-span-3 pl-4" id="reports"></div>
+                <div class="col-span-3 pl-4">
+                    <div class="flex justify-end gap-2 pb-2">
+                        <button type="button" id="reports-select-toggle" class="uk-button uk-button-default uk-button-small">Select</button>
+                        <button type="button" id="reports-delete-selected" class="uk-button uk-button-danger uk-button-small" style="display: none;" disabled>Delete selected</button>
+                    </div>
+                    <div id="reports"></div>
+                </div>
             </div>
         </div>
 
@@ -614,10 +620,38 @@
                     })
                     .then(response => response.json())
                     .then(data => {
-                        makeDataTable(
+                        function deleteReport(key) {
+                            return fetch('?SPX_UI_URI=/data/reports/delete/' + key, {
+                                method: 'POST',
+                                credentials: 'same-origin',
+                            });
+                        }
+
+                        const $selectToggle = $('#reports-select-toggle');
+                        const $deleteSelected = $('#reports-delete-selected');
+
+                        const table = makeDataTable(
                             'reports',
                             {
                                 makeRowUrl: row => '?SPX_UI_URI=/report.html&key=' + row.key,
+                                rowActions: [
+                                    {
+                                        name: 'delete',
+                                        label: 'Delete',
+                                        onClick: row => {
+                                            if (!confirm('Delete this report?')) {
+                                                return;
+                                            }
+
+                                            deleteReport(row.key).then(() => table.removeRows([row.key]));
+                                        },
+                                    },
+                                ],
+                                onSelectionChange: selectedKeys => {
+                                    $deleteSelected
+                                        .text(`Delete selected (${selectedKeys.length})`)
+                                        .prop('disabled', selectedKeys.length === 0);
+                                },
                                 columns: [
                                     {
                                         label: 'Date',
@@ -630,16 +664,6 @@
                                         value: row => row.cli ? row.cli_command_line
                                                 : row.http_method + ' ' + row.http_host + row.http_request_uri
                                         ,
-                                    },
-                                    {
-                                        label: 'Host',
-                                        cssClass: 'breakable-text',
-                                        value: 'host_name',
-                                    },
-                                    {
-                                        label: 'Custom metadata',
-                                        cssClass: 'breakable-text',
-                                        value: 'custom_metadata_str',
                                     },
                                     {
                                         label: 'Wall time',
@@ -670,6 +694,33 @@
                             },
                             data.results
                         );
+
+                        let selectionMode = false;
+                        $selectToggle.on('click', () => {
+                            selectionMode = !selectionMode;
+                            table.setSelectionMode(selectionMode);
+                            $selectToggle.text(selectionMode ? 'Cancel' : 'Select');
+                            $deleteSelected.toggle(selectionMode);
+                        });
+
+                        $deleteSelected.on('click', () => {
+                            const keys = table.getSelectedKeys();
+                            if (keys.length === 0) {
+                                return;
+                            }
+
+                            if (!confirm(`Delete ${keys.length} selected report(s)?`)) {
+                                return;
+                            }
+
+                            Promise.all(keys.map(deleteReport)).then(() => {
+                                table.removeRows(keys);
+                                selectionMode = false;
+                                table.setSelectionMode(false);
+                                $selectToggle.text('Select');
+                                $deleteSelected.hide();
+                            });
+                        });
                     })
                 ;
             });

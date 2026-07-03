@@ -20,6 +20,10 @@
 export function makeDataTable(containerId, options, rows) {
     let sort_col = 0;
     let sort_dir = -1;
+    let selectionMode = false;
+    let selectedKeys = new Set();
+
+    const getRowKey = row => options.getRowKey ? options.getRowKey(row) : row.key;
 
     function getColumnValue(accessor, row) {
         if ($.type(accessor) === 'function') {
@@ -29,13 +33,27 @@ export function makeDataTable(containerId, options, rows) {
         return row[accessor];
     }
 
+    function notifySelectionChange() {
+        if (options.onSelectionChange) {
+            options.onSelectionChange(Array.from(selectedKeys));
+        }
+    }
+
     let container = $('#' + containerId);
     let render = () => {
         let html = '<table class="data_table text-foreground uk-table uk-table-striped"><thead><tr>';
 
+        if (selectionMode) {
+            html += '<th class="p-2" width="1%"></th>';
+        }
+
         for (let i = 0; i < options.columns.length; i++) {
             let column = options.columns[i];
-            html += `<th ${i == sort_col ? 'class="data_table-sort p-2"' : ''}>${column.label}</th>`;
+            html += `<th class="p-2 ${i == sort_col ? 'data_table-sort' : ''}" data-col-index="${i}">${column.label}</th>`;
+        }
+
+        if (options.rowActions && !selectionMode) {
+            html += '<th class="p-2" width="1%"></th>';
         }
 
         html += '</tr></thead><tbody>';
@@ -48,8 +66,14 @@ export function makeDataTable(containerId, options, rows) {
         });
 
         for (let row of rows) {
-            let url = options.makeRowUrl ? options.makeRowUrl(row) : null;
+            const key = getRowKey(row);
+            let url = options.makeRowUrl && !selectionMode ? options.makeRowUrl(row) : null;
             html += '<tr>';
+
+            if (selectionMode) {
+                html += `<td class="p-2"><input type="checkbox" class="uk-checkbox row-select-checkbox" data-key="${key}" ${selectedKeys.has(key) ? 'checked' : ''}></td>`;
+            }
+
             for (let column of options.columns) {
                 let value = getColumnValue(column.value, row);
                 if (column.format) {
@@ -63,24 +87,82 @@ export function makeDataTable(containerId, options, rows) {
                 html += `<td class="p-2 text-sm ${column.cssClass || ''}">${value}</td>`;
             }
 
+            if (options.rowActions && !selectionMode) {
+                html += '<td class="p-2 text-sm whitespace-nowrap">';
+                for (let action of options.rowActions) {
+                    html += `<button type="button" class="uk-button uk-button-default uk-button-small row-action" data-key="${key}" data-action="${action.name}">${action.label}</button>`;
+                }
+                html += '</td>';
+            }
+
             html += '</tr>';
         }
 
         html += '</tbody></table>';
 
+        container.empty();
         container.append(html);
-        container.find('th').click(e => {
-            let current = $(e.target).index();
+
+        container.find('th[data-col-index]').click(e => {
+            let current = parseInt($(e.currentTarget).attr('data-col-index'), 10);
             if (sort_col == current) {
                 sort_dir *= -1;
             }
 
             sort_col = current;
 
-            container.empty();
             render();
+        });
+
+        container.find('.row-select-checkbox').on('change', e => {
+            let key = $(e.currentTarget).attr('data-key');
+            if (e.currentTarget.checked) {
+                selectedKeys.add(key);
+            } else {
+                selectedKeys.delete(key);
+            }
+
+            notifySelectionChange();
+        });
+
+        container.find('.row-action').on('click', e => {
+            e.preventDefault();
+
+            let key = $(e.currentTarget).attr('data-key');
+            let actionName = $(e.currentTarget).attr('data-action');
+            let action = options.rowActions.find(a => a.name === actionName);
+            let row = rows.find(r => getRowKey(r) === key);
+
+            if (action && row) {
+                action.onClick(row);
+            }
         });
     }
 
     render();
+
+    return {
+        setSelectionMode(enabled) {
+            selectionMode = enabled;
+            if (!enabled) {
+                selectedKeys.clear();
+            }
+
+            notifySelectionChange();
+            render();
+        },
+        getSelectedKeys() {
+            return Array.from(selectedKeys);
+        },
+        removeRows(keys) {
+            let keySet = new Set(keys);
+            rows = rows.filter(row => !keySet.has(getRowKey(row)));
+            for (let key of keySet) {
+                selectedKeys.delete(key);
+            }
+
+            notifySelectionChange();
+            render();
+        },
+    };
 }

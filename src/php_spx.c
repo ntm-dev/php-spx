@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #if ! defined(ZTS) && ! defined(_WIN32)
 #   define USE_SIGNAL
@@ -1191,6 +1192,38 @@ static int http_ui_handler_data(const char * data_dir, const char *relative_path
         }
 
         return http_ui_handler_output_file(file_name);
+    }
+
+    const char * delete_report_uri = "/data/reports/delete/";
+    if (spx_utils_str_starts_with(relative_path, delete_report_uri)) {
+        TSRMLS_FETCH();
+
+        const char * method = spx_php_global_array_get("_SERVER", "REQUEST_METHOD");
+        if (!method || 0 != strcmp(method, "POST")) {
+            spx_php_output_add_header_line("HTTP/1.1 405 Method Not Allowed");
+            spx_php_output_send_headers();
+
+            return 0;
+        }
+
+        const char * key = relative_path + strlen(delete_report_uri) - 1;
+
+        char metadata_file_name[PATH_MAX];
+        char data_file_name[PATH_MAX];
+
+        int found = 0;
+        if (spx_reporter_full_build_metadata_file_name(data_dir, key, metadata_file_name, sizeof(metadata_file_name))) {
+            found |= 0 == unlink(metadata_file_name);
+        }
+
+        if (spx_reporter_full_build_file_name(data_dir, key, data_file_name, sizeof(data_file_name))) {
+            found |= 0 == unlink(data_file_name);
+        }
+
+        spx_php_output_add_header_line(found ? "HTTP/1.1 200 OK" : "HTTP/1.1 404 Not Found");
+        spx_php_output_send_headers();
+
+        return 0;
     }
 
     if (0 == strcmp(relative_path, "/data/whitelist/url")) {
