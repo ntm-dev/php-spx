@@ -44,7 +44,7 @@ export function makeDataTable(containerId, options, rows) {
         let html = '<table class="data_table text-foreground uk-table uk-table-striped"><thead><tr>';
 
         if (selectionMode) {
-            html += '<th class="p-2" width="1%"></th>';
+            html += '<th class="p-2" style="text-align: center; vertical-align: middle;" width="1%"></th>';
         }
 
         for (let i = 0; i < options.columns.length; i++) {
@@ -71,7 +71,7 @@ export function makeDataTable(containerId, options, rows) {
             html += '<tr>';
 
             if (selectionMode) {
-                html += `<td class="p-2"><input type="checkbox" class="uk-checkbox row-select-checkbox" data-key="${key}" ${selectedKeys.has(key) ? 'checked' : ''}></td>`;
+                html += `<td class="p-2" style="text-align: center; vertical-align: middle;"><input type="checkbox" class="uk-checkbox row-select-checkbox" data-key="${key}" ${selectedKeys.has(key) ? 'checked' : ''}></td>`;
             }
 
             for (let column of options.columns) {
@@ -88,9 +88,13 @@ export function makeDataTable(containerId, options, rows) {
             }
 
             if (options.rowActions && !selectionMode) {
-                html += '<td class="p-2 text-sm whitespace-nowrap">';
+                html += '<td class="p-2 text-sm" style="white-space: nowrap;">';
                 for (let action of options.rowActions) {
-                    html += `<button type="button" class="uk-button uk-button-default uk-button-small row-action" data-key="${key}" data-action="${action.name}">${action.label}</button>`;
+                    let title = action.title || action.label || '';
+                    html += `<button type="button" class="row-action ${action.cssClass || 'uk-button uk-button-default uk-button-small'}"`
+                        + (action.style ? ` style="${action.style}"` : '')
+                        + ` title="${title}" aria-label="${title}" data-key="${key}" data-action="${action.name}">`
+                        + `${action.html || action.label}</button>`;
                 }
                 html += '</td>';
             }
@@ -163,6 +167,19 @@ export function makeDataTable(containerId, options, rows) {
 
             notifySelectionChange();
             render();
+        },
+        selectAll() {
+            selectedKeys = new Set(rows.map(getRowKey));
+            notifySelectionChange();
+            render();
+        },
+        deselectAll() {
+            selectedKeys.clear();
+            notifySelectionChange();
+            render();
+        },
+        getRowCount() {
+            return rows.length;
         },
     };
 }
