@@ -327,9 +327,14 @@ static void finalize(full_reporter_t * reporter, const spx_profiler_event_t * ev
     for (i = 0; i < event->func_table.size; i++) {
         const spx_profiler_func_table_entry_t * entry = &event->func_table.entries[i];
 
+        /*
+            File path is prefixed with a tab separator so older report readers (which treat the
+            whole line as the display name) keep working, and newer ones can split on the first \t.
+        */
         spx_output_stream_printf(
             reporter->output,
-            "%s%s%s\n",
+            "%s\t%s%s%s\n",
+            entry->function.file_name,
             entry->function.class_name,
             entry->function.class_name[0] ? "::" : "",
             entry->function.func_name

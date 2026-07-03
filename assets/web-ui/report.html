@@ -241,9 +241,17 @@
                             }
 
                             if (type == 'function') {
+                                // Line format is "<file path>\t<function name>". Older reports have
+                                // no tab (no file path known), in which case the whole line is the name.
+                                const tabIdx = line.indexOf('\t');
+                                const idx = currentFunctionIdx++;
                                 profileDataBuilder.setFunctionName(
-                                    currentFunctionIdx++,
-                                    line
+                                    idx,
+                                    tabIdx > -1 ? line.slice(tabIdx + 1) : line
+                                );
+                                profileDataBuilder.setFunctionFilePath(
+                                    idx,
+                                    tabIdx > -1 ? line.slice(0, tabIdx) : ''
                                 );
 
                                 continue;

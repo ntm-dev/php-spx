@@ -1698,7 +1698,7 @@ export class FlatProfile extends Widget {
                 this.searchQuery && (stats.functionName.toLowerCase()).indexOf(this.searchQuery.toLowerCase()) < 0
             ))
             .filter(stats => !(
-                this.hideVendor && stats.functionName.toLowerCase().indexOf('vendor/') > -1
+                this.hideVendor && stats.filePath.toLowerCase().indexOf('/vendor/') > -1
             ));
 
         functionsStats.sort((a, b) => {

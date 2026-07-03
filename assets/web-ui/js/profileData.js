@@ -165,6 +165,10 @@ class CallListEntry {
         return this.list.functionNames[this.getFunctionIdx()];
     }
 
+    getFunctionFilePath() {
+        return this.list.functionFilePaths[this.getFunctionIdx()];
+    }
+
     getMetrics() {
         return this.list.metrics;
     }
@@ -316,6 +320,7 @@ class CallList {
     constructor(functionCount, metrics) {
         this.metrics = metrics;
         this.functionNames = Array(functionCount).fill("n/a");
+        this.functionFilePaths = Array(functionCount).fill("");
 
         this.metricOffsets = {};
         for (let i = 0; i < this.metrics.length; i++) {
@@ -372,6 +377,12 @@ class CallList {
 
     setFunctionName(idx, functionName) {
         this.functionNames[idx] = functionName;
+
+        return this;
+    }
+
+    setFunctionFilePath(idx, filePath) {
+        this.functionFilePaths[idx] = filePath;
 
         return this;
     }
@@ -617,6 +628,7 @@ class FunctionsStats {
             if (!stats) {
                 stats = {
                     functionName: call.getFunctionName(),
+                    filePath: call.getFunctionFilePath(),
                     maxCycleDepth: 0,
                     called: 0,
                     inc: MetricValueSet.createFromMetricsAndValue(call.getMetrics(), 0),
@@ -650,6 +662,7 @@ class FunctionsStats {
             if (!a) {
                 this.functionsStats.set(key, {
                     functionName: b.functionName,
+                    filePath: b.filePath,
                     maxCycleDepth: b.maxCycleDepth,
                     called: b.called,
                     inc: b.inc.copy(),
@@ -1338,6 +1351,10 @@ export class ProfileDataBuilder {
 
     setFunctionName(idx, name) {
         this.callList.setFunctionName(idx, name);
+    }
+
+    setFunctionFilePath(idx, filePath) {
+        this.callList.setFunctionFilePath(idx, filePath);
     }
 
     buildCallRangeTree(setProgress) {

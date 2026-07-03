@@ -42,6 +42,7 @@ typedef struct {
 
     const char * func_name;
     const char * class_name;
+    const char * file_name;
 } spx_php_function_t;
 
 int spx_php_is_cli_sapi(void);

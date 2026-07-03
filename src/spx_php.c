@@ -264,6 +264,7 @@ void spx_php_current_function(spx_php_function_t * function)
     function->hash_code = 0;
     function->class_name = "";
     function->func_name = "";
+    function->file_name = "";
 
     if (context.active_function_name) {
         function->class_name = "";
@@ -894,6 +895,10 @@ static void execute_data_function(const zend_execute_data * execute_data, spx_ph
                     function->func_name = ZSTR_VAL(function_name);
                 }
 
+                if (func->op_array.filename) {
+                    function->file_name = ZSTR_VAL(func->op_array.filename);
+                }
+
                 break;
             }
 
@@ -915,14 +920,16 @@ static void execute_data_function(const zend_execute_data * execute_data, spx_ph
         switch (execute_data->function_state.function->type) {
             case ZEND_USER_FUNCTION:
             {
-                const char * function_name = (
-                        (zend_op_array *) execute_data->function_state.function
-                    )
-                    ->function_name
-                ;
+                const zend_op_array * op_array = (
+                    (zend_op_array *) execute_data->function_state.function
+                );
 
-                if (function_name) {
-                    function->func_name = function_name;
+                if (op_array->function_name) {
+                    function->func_name = op_array->function_name;
+                }
+
+                if (op_array->filename) {
+                    function->file_name = op_array->filename;
                 }
 
                 break;
@@ -957,6 +964,7 @@ static void execute_data_function(const zend_execute_data * execute_data, spx_ph
 
     if (!function->func_name[0]) {
         function->class_name = "";
+        function->file_name = "";
 
 #if ZEND_MODULE_API_NO >= 20151012
         while (execute_data && (!execute_data->func || !ZEND_USER_CODE(execute_data->func->type))) {
@@ -965,12 +973,14 @@ static void execute_data_function(const zend_execute_data * execute_data, spx_ph
 
         if (execute_data) {
             function->func_name = ZSTR_VAL(execute_data->func->op_array.filename);
+            function->file_name = function->func_name;
         } else {
             function->func_name = "[no active file]";
         }
 #else
         if (EG(active_op_array)) {
             function->func_name = EG(active_op_array)->filename;
+            function->file_name = function->func_name;
         } else {
             function->func_name = "[no active file]";
         }

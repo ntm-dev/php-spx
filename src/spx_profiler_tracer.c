@@ -530,9 +530,11 @@ static spx_profiler_func_table_entry_t * func_table_get_entry(
      */
     entry->function.func_name = strdup(entry->function.func_name);
     entry->function.class_name = strdup(entry->function.class_name);
+    entry->function.file_name = strdup(entry->function.file_name);
     if (
         !entry->function.func_name
         || !entry->function.class_name
+        || !entry->function.file_name
     ) {
         spx_utils_die("Cannot dup function / class name\n");
     }
@@ -559,6 +561,7 @@ static void func_table_reset(func_table_t * func_table)
 
         free((char *)entry->function.func_name);
         free((char *)entry->function.class_name);
+        free((char *)entry->function.file_name);
     }
 
     func_table->size = 0;
