@@ -313,10 +313,13 @@ static PHP_RINIT_FUNCTION(spx)
         );
 
         /*
-            The access (multi-factor authentication check) is required as long as the client request the
-            access to the web UI or to profile the current script.
+            The access (multi-factor authentication check) is only required to reach the web UI.
+            Profiling of a business request is never triggered by a client-supplied SPX_KEY /
+            SPX_ENABLED: it is granted exclusively through the URL/IP whitelist below, so a stray
+            or reused SPX_KEY on an unrelated request (e.g. a preflight/auth call sent alongside a
+            whitelisted request) can no longer cause it to be profiled too.
         */
-        const int access_required = context.config.ui_uri || context.config.enabled;
+        const int access_required = context.config.ui_uri != NULL;
 
         if (!access_required || !check_access()) {
             /*
@@ -330,8 +333,9 @@ static PHP_RINIT_FUNCTION(spx)
             );
 
             /*
-                Requests targeting a whitelisted URL are automatically profiled, without requiring
-                the client to provide a matching SPX_KEY.
+                Requests targeting a whitelisted URL (and, unless disabled, a whitelisted client IP)
+                are automatically profiled. This is the only way to trigger profiling of a business
+                request over HTTP.
             */
             if (check_url_whitelist()) {
                 context.config.enabled = 1;
