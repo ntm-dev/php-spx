@@ -43,14 +43,14 @@
                     <span class="text-[13px]">PHP Profiler</span>
                 </a>
 
-                <div class="flex flex-row items-center gap-2 flex-1">
+                <div class="flex flex-row items-center gap-2 ml-auto">
                     <div id="metric-selector" class="widget" style="flex: 0 0 120px;">
-                        <select class="uk-select"></select>
+                        <select class="uk-select bg-background"></select>
                     </div>
                     <div id="category-legend" class="widget"></div>
                     <div id="search-container" class="widget">
                         <div class="uk-inline">
-                            <input type="text" id="search_query" class="uk-input" name="search_query" autocomplete="off"
+                            <input type="text" id="search_query" class="uk-input bg-background" name="search_query" autocomplete="off"
                                 placeholder="Function name">
                             <a onclick="$(window).trigger('spx-search-clear')" id="search_query_button_clear"
                                 style="display: none;" class="uk-form-icon uk-form-icon-flip" href="#" uk-icon="icon: close">
@@ -58,14 +58,14 @@
                         </div>
                     </div>
                     <div id="hide-vendor-container" class="widget" style="flex: 0 0 auto;">
-                        <button id="hide-vendor-toggle" type="button" class="uk-button uk-button-default"
+                        <button id="hide-vendor-toggle" type="button" class="uk-button uk-button-default bg-background"
                             title="Hide functions from vendor/ files">
                             Hide vendor
                         </button>
                     </div>
                 </div>
 
-                <select class="uk-select bg-background w-64" id="report-selector"
+                <select class="uk-select bg-background w-64 flex-none" id="report-selector"
                     onchange="window.location.href = '/?SPX_UI_URI=/report.html&key=' + this.value">
                     >
                 </select>
